@@ -1,0 +1,6 @@
+2026/01/04-11:16:13.717 39c70 Reusing MANIFEST D:\BELAJAR WEB\skripsi-backend-api\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
+2026/01/04-11:16:13.720 39c70 Recovering log #7
+2026/01/04-11:16:13.721 39c70 Reusing old log D:\BELAJAR WEB\skripsi-backend-api\.wwebjs_auth\session\Default\Local Storage\leveldb/000007.log 
+2026/01/04-11:23:50.496 3ddf0 Level-0 table #11: started
+2026/01/04-11:23:50.503 3ddf0 Level-0 table #11: 17287 bytes OK
+2026/01/04-11:23:50.510 3ddf0 Delete type=0 #7

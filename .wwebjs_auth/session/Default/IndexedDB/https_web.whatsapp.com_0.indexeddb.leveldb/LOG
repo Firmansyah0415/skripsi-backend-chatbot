@@ -1,0 +1,13 @@
+2026/01/04-11:16:14.169 3c4bc Reusing MANIFEST D:\BELAJAR WEB\skripsi-backend-api\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/01/04-11:16:14.169 3c4bc Recovering log #119
+2026/01/04-11:16:14.172 3c4bc Reusing old log D:\BELAJAR WEB\skripsi-backend-api\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000119.log 
+2026/01/04-11:16:15.708 3c4bc Level-0 table #124: started
+2026/01/04-11:16:15.714 3c4bc Level-0 table #124: 143581 bytes OK
+2026/01/04-11:16:15.717 3c4bc Delete type=0 #119
+2026/01/04-11:16:15.718 3c4bc Manual compaction at level-0 from '\x001\x00\x00\x00' @ 72057594037927935 : 1 .. '\x002\x00\x00\x00' @ 0 : 0; will stop at (end)
+2026/01/04-11:16:15.738 3c318 Compacting 1@1 + 1@2 files
+2026/01/04-11:16:15.771 3c318 Generated table #125@1: 59228 keys, 2100101 bytes
+2026/01/04-11:16:15.772 3c318 Compacted 1@1 + 1@2 files => 2100101 bytes
+2026/01/04-11:16:15.775 3c318 compacted to: files[ 0 0 1 0 0 0 0 ]
+2026/01/04-11:16:15.775 3c318 Delete type=2 #121
+2026/01/04-11:16:15.775 3c318 Delete type=2 #124
