@@ -3,18 +3,28 @@ const db = require('../config/firebaseConfig');
 // 1. Sync Task
 const syncTask = async (req, res) => {
     try {
-        const { uid, task_id, ...taskData } = req.body;
+        const {
+            uid,
+            user_id,
+            task_id,
+            id,
+            ...taskData
+        } = req.body;
 
-        if (!uid) return res.status(400).json({ error: 'UID User wajib ada' });
+        // Logika penentuan UID (sama seperti Event)
+        const finalUid = user_id || uid;
+        // Logika penentuan Doc ID (sama seperti Event)
+        const finalDocId = id || task_id;
 
-        // Target Collection: users/{uid}/tasks
-        const collectionRef = db.collection('users').doc(uid).collection('tasks');
+        if (!finalUid) return res.status(400).json({ error: 'UID User wajib ada' });
+
+        const collectionRef = db.collection('users').doc(finalUid).collection('tasks');
 
         let docRef;
-        if (task_id) {
-            docRef = collectionRef.doc(task_id);
+        if (finalDocId) {
+            docRef = collectionRef.doc(finalDocId); // UPDATE
         } else {
-            docRef = collectionRef.doc();
+            docRef = collectionRef.doc(); // CREATE
         }
 
         const payload = {

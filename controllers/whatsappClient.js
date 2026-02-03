@@ -134,4 +134,4 @@ const startWhatsAppBot = () => {
     client.initialize();
 };
 
-module.exports = { startWhatsAppBot };
+module.exports = { startWhatsAppBot, client };

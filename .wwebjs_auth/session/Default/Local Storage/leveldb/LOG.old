@@ -1,3 +1,2 @@
-2026/01/04-11:14:23.602 3b740 Reusing MANIFEST D:\BELAJAR WEB\skripsi-backend-api\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
-2026/01/04-11:14:23.606 3b740 Recovering log #7
-2026/01/04-11:14:23.607 3b740 Reusing old log D:\BELAJAR WEB\skripsi-backend-api\.wwebjs_auth\session\Default\Local Storage\leveldb/000007.log 
+2026/02/02-14:16:12.596 e5f4 Creating DB D:\BELAJAR WEB\skripsi-backend-api\.wwebjs_auth\session\Default\Local Storage\leveldb since it was missing.
+2026/02/02-14:16:12.656 e5f4 Reusing MANIFEST D:\BELAJAR WEB\skripsi-backend-api\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
