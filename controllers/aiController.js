@@ -121,27 +121,40 @@ const chatWithGemini = async (req, res) => {
            - Mengajar = 👨‍🏫 **JADWAL MENGAJAR**
            - Konsultasi = 🎓 **JADWAL SESI BIMBINGAN**
         
-        2. Format Tampilan Per Item:
+        2. Format Tampilan Per Item (Jangan pakai deskripsi panjang):
            - Judul harus di-Bold (*Judul*).
-           - Baris Metadata: 📅 [Tanggal] ⏰ [Jam]
-           - Baris Lokasi: 📍 [Lokasi]
-           - Baris Catatan (Hanya jika ada): ℹ️ [Catatan/Deskripsi]
+           - Baris Metadata: 🔴 [Prioritas] | [Status Emoticon] [Status Teks]
+           - Baris Waktu: 📅 [Tanggal] ⏰ [Jam]
+           - Baris Lokasi (Jika ada): 📍 [Lokasi]
 
-        ATURAN LOGIKA STATUS:
-        - Jika tanggal jadwal < tanggal hari ini, anggap [Selesai/Lewat].
-        - Jika tanggal jadwal >= tanggal hari ini, anggap [Upcoming].
+        ATURAN LOGIKA STATUS & EMOTIKON (PENTING):
+        Cek field 'IsCompleted' dan Bandingkan Waktu Jadwal dengan 'Waktu Saat Ini':
+        - Status: Selesai (IsCompleted = true) -> Gunakan emot ✅ [Selesai].
+        - Status: Belum Selesai TAPI Waktu Jadwal > Waktu Saat Ini -> Gunakan emot ⏳ [Upcoming].
+        - Status: Belum Selesai DAN Waktu Jadwal < Waktu Saat Ini (Kadaluarsa) -> Gunakan emot ⛔ [Terlewat].
 
-        CONTOH OUTPUT (SESI BIMBINGAN):
-        🎓 **JADWAL SESI BIMBINGAN**
+        ATURAN PRIORITAS:
+        - High/Tinggi = 🔴 Tinggi
+        - Medium/Sedang = 🟡 Sedang
+        - Low/Rendah = 🟢 Rendah
+
+        CONTOH FORMAT OUTPUT (Gunakan style ini untuk semua kategori):
+        🎓 **JADWAL BIMBINGAN**
         1. *Bimbingan Skripsi & KP*
+           🔴 Tinggi | ⏳ Upcoming
            📅 20/02/2026 ⏰ 09:00 - 12:00
            📍 Lab RPL
-           ℹ️ Catatan: Fokus Review Bab 4
+
+        📝 **DAFTAR TUGAS**
+        1. *Koreksi Nilai UAS*
+           🔴 Tinggi | ⛔ Terlewat
+           📅 05/02/2026 ⏰ 23:59
 
         INSTRUKSI RESPON:
-        - Jawab pertanyaan user: "${message}" secara sopan dan ringkas.
-        - Jika user bertanya jadwal, tampilkan list sesuai format di atas.
-        - Jangan mengarang nama mahasiswa jika tidak ada di data.
+        - Jawab pertanyaan user: "${message}" secara sopan, ringkas dan to the point.
+        - Jika user bertanya jadwal, tampilkan list sesuai format compact di atas.
+        - Jangan tampilkan deskripsi/catatan panjang agar chat tidak penuh.
+        - Jika user hanya menyapa, sapa balik dan tawarkan untuk mengecek jadwal.
         `;
 
         // --- 6. KIRIM KE GEMINI ---
