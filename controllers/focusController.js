@@ -59,7 +59,7 @@ const getAllSessions = async (req, res) => {
         const sessions = [];
         snapshot.forEach(doc => {
             sessions.push({
-                firestoreId: doc.id,
+                session_id: doc.id,
                 ...doc.data()
             });
         });
