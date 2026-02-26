@@ -6,7 +6,13 @@ const db = require('../config/firebaseConfig');
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage', // Wajib untuk server VPS/Hosting
+            '--single-process',        // Sangat menghemat RAM
+            '--no-zygote'
+        ]
     }
 });
 
