@@ -2,6 +2,7 @@
 // 1. IMPORTS (Third Party & Local Modules)
 // ==========================================
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 require('dotenv').config();
@@ -31,7 +32,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors()); // Agar bisa diakses dari berbagai origin
 app.use(bodyParser.json()); // Agar bisa membaca format JSON
 // --- TAMBAHKAN BARIS INI UNTUK MENAMPILKAN WEB ---
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 // -------------------------------------------------
 
 // ==========================================
