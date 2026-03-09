@@ -3,22 +3,26 @@ const qrcode = require('qrcode-terminal');
 const { chatWithGemini } = require('./aiController');
 const db = require('../config/firebaseConfig');
 
+// --- PERBAIKAN: Deteksi OS secara otomatis ---
+const isWindows = process.platform === 'win32';
+const chromePath = isWindows
+    ? 'C:\\Users\\LENOVO\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe'
+    : undefined; // Di Linux (VPS), undefined berarti pakai Chromium bawaan Puppeteer
+
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        headless: true, // Pastikan ini true
-        // --- INI PATH CHROME ASLI KAMU ---
-        executablePath: 'C:\\Users\\LENOVO\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe',
-        // ---------------------------------
+        headless: true,
+        executablePath: chromePath, // <--- Gunakan variabel dinamis ini
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage', // Wajib untuk server VPS/Hosting
-            '--single-process',        // Sangat menghemat RAM
+            '--disable-dev-shm-usage',
+            '--single-process',
             '--no-zygote',
-            '--disable-accelerated-2d-canvas', // Mencegah crash rendering grafis
-            '--no-first-run',                  // Melewati setup awal Chrome
-            '--disable-gpu'                    // Wajib untuk Windows tanpa GPU dedicated
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--disable-gpu'
         ]
     }
 });
