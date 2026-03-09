@@ -49,9 +49,9 @@ app.use('/api/focus', focusRoutes);
 app.use('/api/upload', uploadRoutes);
 
 // Route Utama (Cek Status Server)
-app.get('/', (req, res) => {
-    res.send('Halo! Server Backend Skripsi "Lecturo" siap dan berjalan normal.');
-});
+// app.get('/', (req, res) => {
+//     res.send('Halo! Server Backend Skripsi "Lecturo" siap dan berjalan normal.');
+// });
 
 // ==========================================
 // 4. START SERVICES
