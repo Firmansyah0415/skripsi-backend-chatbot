@@ -6,12 +6,19 @@ const db = require('../config/firebaseConfig');
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
+        headless: true, // Pastikan ini true
+        // --- INI PATH CHROME ASLI KAMU ---
+        executablePath: 'C:\\Users\\LENOVO\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe',
+        // ---------------------------------
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage', // Wajib untuk server VPS/Hosting
             '--single-process',        // Sangat menghemat RAM
-            '--no-zygote'
+            '--no-zygote',
+            '--disable-accelerated-2d-canvas', // Mencegah crash rendering grafis
+            '--no-first-run',                  // Melewati setup awal Chrome
+            '--disable-gpu'                    // Wajib untuk Windows tanpa GPU dedicated
         ]
     }
 });

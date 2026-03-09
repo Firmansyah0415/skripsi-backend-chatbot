@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Upload Jadwal - Lecturo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .card {
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 450px;
+            box-sizing: border-box;
+        }
+
+        h2 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+
+        p.subtitle {
+            color: #7f8c8d;
+            text-align: center;
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #34495e;
+            font-weight: 600;
+        }
+
+        input[type="text"],
+        input[type="file"],
+        input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #bdc3c7;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: #95a5a6;
+            margin-top: 10px;
+        }
+
+        .btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+
+        #alert {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+            font-size: 14px;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* Pengatur Tampilan Sesi */
+        #section-otp,
+        #section-upload {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+        <h2>Lecturo App</h2>
+        <p class="subtitle" id="form-subtitle">Login Dosen (Via WhatsApp)</p>
+
+        <form id="section-login">
+            <div class="form-group">
+                <label for="phone">Nomor WhatsApp</label>
+                <input type="text" id="phone" placeholder="Contoh: 08123456789" required>
+            </div>
+            <button type="submit" id="btnRequestOtp">Kirim OTP ke WhatsApp</button>
+        </form>
+
+        <form id="section-otp">
+            <div class="form-group">
+                <label for="otp">Kode OTP</label>
+                <input type="number" id="otp" placeholder="Masukkan 4 digit kode" required>
+            </div>
+            <button type="submit" id="btnVerifyOtp">Verifikasi Login</button>
+            <button type="button" class="btn-secondary" onclick="resetToLogin()">Kembali</button>
+        </form>
+
+        <form id="section-upload">
+            <div class="form-group">
+                <label for="file_jadwal">Pilih File CSV (.csv)</label>
+                <input type="file" id="file_jadwal" accept=".csv" required>
+            </div>
+            <button type="submit" id="btnUpload">Upload Jadwal Sekarang</button>
+            <button type="button" class="btn-secondary" onclick="logout()">Logout</button>
+        </form>
+
+        <div id="alert"></div>
+    </div>
+
+    <script>
+        // Variabel global penyimpan data sementara
+        let currentUserPhone = "";
+        let currentUserUid = "";
+
+        const alertBox = document.getElementById('alert');
+
+        function showAlert(msg, isError = false) {
+            alertBox.style.display = 'block';
+            alertBox.className = isError ? 'alert-error' : 'alert-success';
+            alertBox.innerHTML = msg;
+        }
+
+        function hideAlert() { alertBox.style.display = 'none'; }
+
+        function resetToLogin() {
+            document.getElementById('section-login').style.display = 'block';
+            document.getElementById('section-otp').style.display = 'none';
+            document.getElementById('section-upload').style.display = 'none';
+            document.getElementById('form-subtitle').innerText = "Login Dosen (Via WhatsApp)";
+            hideAlert();
+        }
+
+        function logout() {
+            currentUserPhone = "";
+            currentUserUid = "";
+            document.getElementById('phone').value = "";
+            document.getElementById('otp').value = "";
+            document.getElementById('file_jadwal').value = "";
+            resetToLogin();
+        }
+
+        // --- PROSES 1: REQUEST OTP ---
+        document.getElementById('section-login').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const phone = document.getElementById('phone').value;
+            const btn = document.getElementById('btnRequestOtp');
+
+            btn.disabled = true;
+            btn.innerText = "Mengirim...";
+            hideAlert();
+
+            try {
+                const response = await fetch('/api/auth/request-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: phone })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.status === 'success') {
+                    currentUserPhone = phone;
+                    showAlert("OTP berhasil dikirim ke WhatsApp Anda.");
+                    document.getElementById('section-login').style.display = 'none';
+                    document.getElementById('section-otp').style.display = 'block';
+                    document.getElementById('form-subtitle').innerText = "Verifikasi Kode OTP";
+                } else {
+                    showAlert(result.message || "Gagal mengirim OTP.", true);
+                }
+            } catch (error) {
+                showAlert("Gagal terhubung ke server.", true);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Kirim OTP ke WhatsApp";
+            }
+        });
+
+        // --- PROSES 2: VERIFY OTP ---
+        document.getElementById('section-otp').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const otpCode = document.getElementById('otp').value;
+            const btn = document.getElementById('btnVerifyOtp');
+
+            btn.disabled = true;
+            btn.innerText = "Memverifikasi...";
+            hideAlert();
+
+            try {
+                const response = await fetch('/api/auth/verify-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: currentUserPhone, otp_code: otpCode })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.status === 'success') {
+                    // Simpan UID secara internal di memori browser
+                    currentUserUid = result.uid;
+
+                    hideAlert();
+                    document.getElementById('section-otp').style.display = 'none';
+                    document.getElementById('section-upload').style.display = 'block';
+                    document.getElementById('form-subtitle').innerText = "Portal Upload Jadwal CSV";
+                } else {
+                    showAlert(result.message || "Kode OTP Salah.", true);
+                }
+            } catch (error) {
+                showAlert("Gagal memverifikasi OTP.", true);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Verifikasi Login";
+            }
+        });
+
+        // --- PROSES 3: UPLOAD FILE CSV ---
+        document.getElementById('section-upload').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnUpload');
+            const fileInput = document.getElementById('file_jadwal').files[0];
+
+            btn.disabled = true;
+            btn.innerText = "Memproses Upload...";
+            hideAlert();
+
+            // Kita masukkan file beserta UID yang didapat dari proses Login tadi
+            const formData = new FormData();
+            formData.append('uid', currentUserUid);
+            formData.append('file_jadwal', fileInput);
+
+            try {
+                const response = await fetch('/api/upload/csv', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showAlert(`<strong>Sukses!</strong> ${result.message}<br>Berhasil: ${result.data_berhasil} data.<br>Gagal: ${result.data_gagal} data.`);
+                    document.getElementById('file_jadwal').value = ""; // Kosongkan file input
+                } else {
+                    showAlert(`<strong>Gagal:</strong> ${result.error || 'Terjadi kesalahan'}`, true);
+                }
+            } catch (error) {
+                showAlert(`<strong>Error:</strong> Gagal mengupload file.`, true);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Upload Jadwal Sekarang";
+            }
+        });
+    </script>
+</body>
+
+</html>

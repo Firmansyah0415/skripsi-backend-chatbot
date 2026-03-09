@@ -14,11 +14,13 @@
     "@google/generative-ai": "^0.24.1",
     "body-parser": "^2.2.1",
     "cors": "^2.8.5",
+    "csv-parser": "^3.2.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "firebase-admin": "^13.6.0",
-    "puppeteer": "^24.35.0",
+    "multer": "^2.1.1",
+    "puppeteer": "^24.38.0",
     "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#pull/5791/head"
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main"
   }
 }

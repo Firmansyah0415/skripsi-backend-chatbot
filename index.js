@@ -16,6 +16,7 @@ const taskRoutes = require('./routes/taskRoutes');
 const consultationRoutes = require('./routes/consultationRoutes');
 const consultationPatternRoutes = require('./routes/consultationPatternRoutes');
 const focusRoutes = require('./routes/focusRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 // Import Controllers/Services
 const { startWhatsAppBot } = require('./controllers/whatsappClient');
@@ -29,6 +30,9 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors()); // Agar bisa diakses dari berbagai origin
 app.use(bodyParser.json()); // Agar bisa membaca format JSON
+// --- TAMBAHKAN BARIS INI UNTUK MENAMPILKAN WEB ---
+app.use(express.static('public'));
+// -------------------------------------------------
 
 // ==========================================
 // 3. REGISTER ROUTES
@@ -42,6 +46,7 @@ app.use('/api/tasks', taskRoutes);         // Jadwal Tugas
 app.use('/api/consultation', consultationRoutes); // Jadwal Konsultasi
 app.use('/api/consultation-pattern', consultationPatternRoutes); // Untuk Template Pola konsultasi
 app.use('/api/focus', focusRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Route Utama (Cek Status Server)
 app.get('/', (req, res) => {
