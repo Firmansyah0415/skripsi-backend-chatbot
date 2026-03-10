@@ -307,16 +307,29 @@
 
         function hideAlert() { alertBox.style.display = 'none'; }
 
+        // FUNGSI BARU: Langsung melompat ke halaman Upload
+        function showUploadSection() {
+            hideAlert();
+            document.getElementById('section-login').style.display = 'none';
+            document.getElementById('section-otp').style.display = 'none';
+            document.getElementById('section-upload').style.display = 'block';
+            document.getElementById('form-subtitle').innerText = "Portal Upload Jadwal CSV";
+            mainCard.classList.add('expanded');
+        }
+
         function resetToLogin() {
             document.getElementById('section-login').style.display = 'block';
             document.getElementById('section-otp').style.display = 'none';
             document.getElementById('section-upload').style.display = 'none';
             document.getElementById('form-subtitle').innerText = "Login Dosen (Via WhatsApp)";
-            mainCard.classList.remove('expanded'); // Mengecilkan form
+            mainCard.classList.remove('expanded');
             hideAlert();
         }
 
         function logout() {
+            // Hapus data dari brankas browser saat logout
+            localStorage.removeItem('lecturo_uid');
+
             currentUserPhone = "";
             currentUserUid = "";
             document.getElementById('phone').value = "";
@@ -325,7 +338,16 @@
             resetToLogin();
         }
 
-        // Fungsi Ajaib: Generate File CSV Langsung dari Browser
+        // FUNGSI BARU: Cek LocalStorage saat halaman pertama kali dimuat
+        window.onload = function () {
+            const savedUid = localStorage.getItem('lecturo_uid');
+            if (savedUid) {
+                // Jika UID ada di brankas, langsung bypass ke halaman upload
+                currentUserUid = savedUid;
+                showUploadSection();
+            }
+        };
+
         function downloadTemplate() {
             const csvHeader = "tipe_jadwal,judul,tanggal,waktu_mulai,waktu_selesai,lokasi,deskripsi,kategori_event,kode_kelas,hari,jml_mhs,prioritas,pengingat\n";
             const sampleData = "tugas,Periksa Laporan Bab 1,2026-03-15,09:00,,Ruang Dosen,Cek margin dan sitasi,,,,,Sedang,30\n" +
@@ -390,11 +412,11 @@
 
                 if (response.ok && result.status === 'success') {
                     currentUserUid = result.uid;
-                    hideAlert();
-                    document.getElementById('section-otp').style.display = 'none';
-                    document.getElementById('section-upload').style.display = 'block';
-                    document.getElementById('form-subtitle').innerText = "Portal Upload Jadwal CSV";
-                    mainCard.classList.add('expanded'); // Perlebar form agar tabel muat
+
+                    // SIMPAN UID KE DALAM BRANKAS BROWSER
+                    localStorage.setItem('lecturo_uid', result.uid);
+
+                    showUploadSection();
                 } else {
                     showAlert(result.message || "Kode OTP Salah.", true);
                 }
