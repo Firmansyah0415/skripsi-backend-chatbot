@@ -3,6 +3,44 @@ const db = admin.firestore();
 const fs = require('fs');
 const csv = require('csv-parser');
 
+// --- FUNGSI SABUK PENGAMAN (NORMALISASI JAM KE 24-JAM) ---
+const normalizeTime = (timeStr) => {
+    if (!timeStr) return '';
+
+    // Hilangkan spasi berlebih dan jadikan huruf kecil (contoh: " 1:00:00 PM " jadi "1:00:00 pm")
+    let t = timeStr.trim().toLowerCase();
+
+    // Regex untuk membaca pola: "1:00", "13:00", "1:00 pm", "01:00:00 pm" dll
+    // Match 1: Jam (1-2 digit)
+    // Match 2: Menit (2 digit)
+    // Match 3: Detik (diabaikan)
+    // Match 4: am/pm (opsional)
+    const regex = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?$/;
+    const match = t.match(regex);
+
+    // Jika formatnya sangat aneh dan tidak terbaca regex, kembalikan aslinya
+    if (!match) return timeStr;
+
+    let hours = parseInt(match[1], 10);
+    let minutes = match[2];
+    let modifier = match[3];
+
+    // Logika Konversi ke 24 Jam
+    if (modifier === 'pm' && hours < 12) {
+        hours += 12; // Jam 1 PM jadi 13
+    }
+    if (modifier === 'am' && hours === 12) {
+        hours = 0; // Jam 12 AM (tengah malam) jadi 00
+    }
+
+    // Pastikan jam selalu 2 digit (misal: jam 9 jadi "09")
+    let formattedHours = hours.toString().padStart(2, '0');
+
+    // Kembalikan ke format baku HH:mm
+    return `${formattedHours}:${minutes}`;
+};
+
+
 const uploadScheduleCSV = async (req, res) => {
     try {
         // 1. Validasi File dan UID
@@ -33,7 +71,10 @@ const uploadScheduleCSV = async (req, res) => {
                         const tipe = row.tipe_jadwal?.trim().toLowerCase();
                         const judul = row.judul;
                         const tanggalRaw = row.tanggal; // Asumsi dari CSV format YYYY-MM-DD
-                        const waktuMulai = row.waktu_mulai;
+
+                        // --- TERAPKAN NORMALISASI JAM DI SINI ---
+                        const waktuMulai = normalizeTime(row.waktu_mulai);
+                        const waktuSelesai = row.waktu_selesai ? normalizeTime(row.waktu_selesai) : waktuMulai;
 
                         if (!tipe || !judul || !tanggalRaw || !waktuMulai) {
                             errorCount++;
@@ -63,7 +104,7 @@ const uploadScheduleCSV = async (req, res) => {
                             scheduleData = {
                                 title: judul,
                                 date: tanggalFormattedDDMMYYYY, // Format DD/MM/YYYY
-                                time: waktuMulai,
+                                time: waktuMulai, // Sudah format baku 24-jam
                                 location: row.lokasi || '',
                                 description: row.deskripsi || '',
                                 priority: row.prioritas || 'Sedang',
@@ -87,7 +128,7 @@ const uploadScheduleCSV = async (req, res) => {
                                 title: judul,
                                 category: finalCategory,
                                 date: tanggalFormattedDDMMYYYY, // Format DD/MM/YYYY
-                                time: waktuMulai,
+                                time: waktuMulai, // Sudah format baku 24-jam
                                 location: row.lokasi || '',
                                 description: row.deskripsi || '',
                                 priority: row.prioritas || 'Sedang',
@@ -103,13 +144,13 @@ const uploadScheduleCSV = async (req, res) => {
                             scheduleData = {
                                 title: judul,
                                 date: tanggalFormattedYYYYMMDD, // PERHATIAN: Format YYYY-MM-DD
-                                start_time: waktuMulai,
-                                end_time: row.waktu_selesai || waktuMulai,
+                                start_time: waktuMulai, // Sudah format baku 24-jam
+                                end_time: waktuSelesai, // Sudah format baku 24-jam
                                 location: row.lokasi || '',
                                 description: row.deskripsi || '',
                                 priority: row.prioritas || 'Medium',
                                 status: 'SCHEDULED',
-                                recurring_id: null, // Tambahkan ini agar sama dengan APK
+                                recurring_id: null,
                                 input_source: 'WEB_UPLOAD',
                                 notification_minutes: notificationMinutes,
                                 updated_at: nowISO
@@ -123,10 +164,10 @@ const uploadScheduleCSV = async (req, res) => {
                                 class_code: row.kode_kelas || '-',
                                 classroom: row.lokasi || '-',
                                 day_of_week: row.hari || '-',
-                                start_time: waktuMulai,
-                                end_time: row.waktu_selesai || waktuMulai,
+                                start_time: waktuMulai, // Sudah format baku 24-jam
+                                end_time: waktuSelesai, // Sudah format baku 24-jam
                                 student_count: parseInt(row.jml_mhs) || 0,
-                                start_date: tanggalFormattedDDMMYYYY, // Format DD/MM/YYYY (berdasarkan chat sebelumnya)
+                                start_date: tanggalFormattedDDMMYYYY,
                                 notification_minutes: notificationMinutes,
                                 updated_at: nowISO
                             };
