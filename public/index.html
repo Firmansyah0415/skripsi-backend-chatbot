@@ -13,7 +13,8 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
+            padding: 20px;
         }
 
         .card {
@@ -22,8 +23,15 @@
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             width: 100%;
-            max-width: 450px;
+            max-width: 500px;
+            /* Awalnya kecil untuk login */
             box-sizing: border-box;
+            transition: max-width 0.5s ease;
+        }
+
+        .card.expanded {
+            max-width: 850px;
+            /* Melebar saat masuk ke halaman upload agar tabel muat */
         }
 
         h2 {
@@ -91,6 +99,15 @@
             background-color: #7f8c8d;
         }
 
+        .btn-success {
+            background-color: #2ecc71;
+            margin-bottom: 20px;
+        }
+
+        .btn-success:hover {
+            background-color: #27ae60;
+        }
+
         #alert {
             margin-top: 20px;
             padding: 15px;
@@ -111,17 +128,84 @@
             border: 1px solid #f5c6cb;
         }
 
-        /* Pengatur Tampilan Sesi */
         #section-otp,
         #section-upload {
             display: none;
+        }
+
+        /* Style untuk Tabel Panduan */
+        .guide-container {
+            margin-top: 30px;
+            border-top: 2px dashed #ecf0f1;
+            padding-top: 20px;
+        }
+
+        .guide-title {
+            font-size: 16px;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .guide-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .guide-table th,
+        .guide-table td {
+            border: 1px solid #bdc3c7;
+            padding: 8px;
+        }
+
+        .guide-table th {
+            background-color: #34495e;
+            color: white;
+        }
+
+        /* Warna Bantuan */
+        .bg-red {
+            background-color: #fadbd8;
+            font-weight: bold;
+            color: #c0392b;
+        }
+
+        .bg-green {
+            background-color: #d5f5e3;
+            color: #27ae60;
+        }
+
+        .bg-grey {
+            background-color: #f2f3f4;
+            color: #95a5a6;
+            font-style: italic;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-right: 5px;
+            color: white;
+        }
+
+        .badge-red {
+            background-color: #e74c3c;
+        }
+
+        .badge-green {
+            background-color: #2ecc71;
         }
     </style>
 </head>
 
 <body>
 
-    <div class="card">
+    <div class="card" id="mainCard">
         <h2>Lecturo App</h2>
         <p class="subtitle" id="form-subtitle">Login Dosen (Via WhatsApp)</p>
 
@@ -142,24 +226,78 @@
             <button type="button" class="btn-secondary" onclick="resetToLogin()">Kembali</button>
         </form>
 
-        <form id="section-upload">
-            <div class="form-group">
-                <label for="file_jadwal">Pilih File CSV (.csv)</label>
-                <input type="file" id="file_jadwal" accept=".csv" required>
+        <div id="section-upload">
+            <button type="button" class="btn-success" onclick="downloadTemplate()">📥 Download Template CSV</button>
+
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="file_jadwal">Pilih File CSV Jadwal (.csv)</label>
+                    <input type="file" id="file_jadwal" accept=".csv" required>
+                </div>
+                <button type="submit" id="btnUpload">🚀 Upload Jadwal Sekarang</button>
+                <button type="button" class="btn-secondary" onclick="logout()">Logout</button>
+            </form>
+
+            <div class="guide-container">
+                <div class="guide-title">📖 Panduan Pengisian Kolom CSV</div>
+                <div style="margin-bottom: 10px; text-align: center;">
+                    <span class="badge badge-red">Wajib Diisi</span>
+                    <span class="badge badge-green">Opsional (Boleh Kosong)</span>
+                </div>
+                <table class="guide-table">
+                    <thead>
+                        <tr>
+                            <th>Tipe Jadwal</th>
+                            <th>Kolom Wajib (Merah)</th>
+                            <th>Kolom Opsional (Hijau)</th>
+                            <th>Diabaikan (Kosongkan)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>SEMUA TIPE</strong></td>
+                            <td class="bg-red">tipe_jadwal, judul, tanggal, waktu_mulai</td>
+                            <td class="bg-green">-</td>
+                            <td class="bg-grey">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>tugas</strong></td>
+                            <td class="bg-red">-</td>
+                            <td class="bg-green">lokasi, deskripsi, prioritas, pengingat</td>
+                            <td class="bg-grey">waktu_selesai, kategori_event, kode_kelas, hari, jml_mhs</td>
+                        </tr>
+                        <tr>
+                            <td><strong>mengajar</strong></td>
+                            <td class="bg-red">-</td>
+                            <td class="bg-green">waktu_selesai, lokasi, kode_kelas, hari, jml_mhs, prioritas, pengingat
+                            </td>
+                            <td class="bg-grey">deskripsi, kategori_event</td>
+                        </tr>
+                        <tr>
+                            <td><strong>event</strong></td>
+                            <td class="bg-red">-</td>
+                            <td class="bg-green">kategori_event, lokasi, deskripsi, prioritas, pengingat</td>
+                            <td class="bg-grey">waktu_selesai, kode_kelas, hari, jml_mhs</td>
+                        </tr>
+                        <tr>
+                            <td><strong>konsultasi</strong></td>
+                            <td class="bg-red">-</td>
+                            <td class="bg-green">waktu_selesai, lokasi, deskripsi, prioritas, pengingat</td>
+                            <td class="bg-grey">kategori_event, kode_kelas, hari, jml_mhs</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-            <button type="submit" id="btnUpload">Upload Jadwal Sekarang</button>
-            <button type="button" class="btn-secondary" onclick="logout()">Logout</button>
-        </form>
+        </div>
 
         <div id="alert"></div>
     </div>
 
     <script>
-        // Variabel global penyimpan data sementara
         let currentUserPhone = "";
         let currentUserUid = "";
-
         const alertBox = document.getElementById('alert');
+        const mainCard = document.getElementById('mainCard');
 
         function showAlert(msg, isError = false) {
             alertBox.style.display = 'block';
@@ -174,6 +312,7 @@
             document.getElementById('section-otp').style.display = 'none';
             document.getElementById('section-upload').style.display = 'none';
             document.getElementById('form-subtitle').innerText = "Login Dosen (Via WhatsApp)";
+            mainCard.classList.remove('expanded'); // Mengecilkan form
             hideAlert();
         }
 
@@ -186,15 +325,30 @@
             resetToLogin();
         }
 
-        // --- PROSES 1: REQUEST OTP ---
+        // Fungsi Ajaib: Generate File CSV Langsung dari Browser
+        function downloadTemplate() {
+            const csvHeader = "tipe_jadwal,judul,tanggal,waktu_mulai,waktu_selesai,lokasi,deskripsi,kategori_event,kode_kelas,hari,jml_mhs,prioritas,pengingat\n";
+            const sampleData = "tugas,Periksa Laporan Bab 1,2026-03-15,09:00,,Ruang Dosen,Cek margin dan sitasi,,,,,Sedang,30\n" +
+                "mengajar,Pemrograman Mobile,2026-03-16,13:00,15:00,Lab Komputer 1,,,IF123,Senin,40,High,15\n" +
+                "event,Seminar AI Nasional,2026-03-20,08:00,,Aula Utama,Pembicara dari Google,Akademik,,,,Sedang,60\n" +
+                "konsultasi,Bimbingan Skripsi,2026-03-21,10:00,11:30,Ruang Dosen,Bawa draft revisi bab 3,,,,,Medium,15";
+
+            const blob = new Blob([csvHeader + sampleData], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "Template_Jadwal_Lecturo.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
         document.getElementById('section-login').addEventListener('submit', async function (e) {
             e.preventDefault();
             const phone = document.getElementById('phone').value;
             const btn = document.getElementById('btnRequestOtp');
-
-            btn.disabled = true;
-            btn.innerText = "Mengirim...";
-            hideAlert();
+            btn.disabled = true; btn.innerText = "Mengirim..."; hideAlert();
 
             try {
                 const response = await fetch('/api/auth/request-otp', {
@@ -202,7 +356,6 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ phone_number: phone })
                 });
-
                 const result = await response.json();
 
                 if (response.ok && result.status === 'success') {
@@ -217,20 +370,15 @@
             } catch (error) {
                 showAlert("Gagal terhubung ke server.", true);
             } finally {
-                btn.disabled = false;
-                btn.innerText = "Kirim OTP ke WhatsApp";
+                btn.disabled = false; btn.innerText = "Kirim OTP ke WhatsApp";
             }
         });
 
-        // --- PROSES 2: VERIFY OTP ---
         document.getElementById('section-otp').addEventListener('submit', async function (e) {
             e.preventDefault();
             const otpCode = document.getElementById('otp').value;
             const btn = document.getElementById('btnVerifyOtp');
-
-            btn.disabled = true;
-            btn.innerText = "Memverifikasi...";
-            hideAlert();
+            btn.disabled = true; btn.innerText = "Memverifikasi..."; hideAlert();
 
             try {
                 const response = await fetch('/api/auth/verify-otp', {
@@ -238,62 +386,49 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ phone_number: currentUserPhone, otp_code: otpCode })
                 });
-
                 const result = await response.json();
 
                 if (response.ok && result.status === 'success') {
-                    // Simpan UID secara internal di memori browser
                     currentUserUid = result.uid;
-
                     hideAlert();
                     document.getElementById('section-otp').style.display = 'none';
                     document.getElementById('section-upload').style.display = 'block';
                     document.getElementById('form-subtitle').innerText = "Portal Upload Jadwal CSV";
+                    mainCard.classList.add('expanded'); // Perlebar form agar tabel muat
                 } else {
                     showAlert(result.message || "Kode OTP Salah.", true);
                 }
             } catch (error) {
                 showAlert("Gagal memverifikasi OTP.", true);
             } finally {
-                btn.disabled = false;
-                btn.innerText = "Verifikasi Login";
+                btn.disabled = false; btn.innerText = "Verifikasi Login";
             }
         });
 
-        // --- PROSES 3: UPLOAD FILE CSV ---
-        document.getElementById('section-upload').addEventListener('submit', async function (e) {
+        document.getElementById('uploadForm').addEventListener('submit', async function (e) {
             e.preventDefault();
             const btn = document.getElementById('btnUpload');
             const fileInput = document.getElementById('file_jadwal').files[0];
+            btn.disabled = true; btn.innerText = "Memproses Upload..."; hideAlert();
 
-            btn.disabled = true;
-            btn.innerText = "Memproses Upload...";
-            hideAlert();
-
-            // Kita masukkan file beserta UID yang didapat dari proses Login tadi
             const formData = new FormData();
             formData.append('uid', currentUserUid);
             formData.append('file_jadwal', fileInput);
 
             try {
-                const response = await fetch('/api/upload/csv', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const response = await fetch('/api/upload/csv', { method: 'POST', body: formData });
                 const result = await response.json();
 
                 if (response.ok) {
                     showAlert(`<strong>Sukses!</strong> ${result.message}<br>Berhasil: ${result.data_berhasil} data.<br>Gagal: ${result.data_gagal} data.`);
-                    document.getElementById('file_jadwal').value = ""; // Kosongkan file input
+                    document.getElementById('file_jadwal').value = "";
                 } else {
                     showAlert(`<strong>Gagal:</strong> ${result.error || 'Terjadi kesalahan'}`, true);
                 }
             } catch (error) {
                 showAlert(`<strong>Error:</strong> Gagal mengupload file.`, true);
             } finally {
-                btn.disabled = false;
-                btn.innerText = "Upload Jadwal Sekarang";
+                btn.disabled = false; btn.innerText = "🚀 Upload Jadwal Sekarang";
             }
         });
     </script>
