@@ -40,6 +40,24 @@ const normalizeTime = (timeStr) => {
     return `${formattedHours}:${minutes}`;
 };
 
+// --- FUNGSI SABUK PENGAMAN (NORMALISASI PRIORITAS) ---
+const normalizePriority = (priorityStr) => {
+    if (!priorityStr) return 'Sedang'; // Default
+
+    const p = priorityStr.toLowerCase().trim();
+
+    // Jika mengandung kata-kata ini, jadikan Tinggi
+    if (['tinggi', 'high', 'hight', 'urgent', 'penting'].includes(p)) {
+        return 'Tinggi';
+    }
+    // Jika mengandung kata-kata ini, jadikan Rendah
+    if (['rendah', 'low', 'santai'].includes(p)) {
+        return 'Rendah';
+    }
+
+    // Sisanya (termasuk 'sedang', 'medium', dll)
+    return 'Sedang';
+};
 
 const uploadScheduleCSV = async (req, res) => {
     try {
@@ -107,7 +125,7 @@ const uploadScheduleCSV = async (req, res) => {
                                 time: waktuMulai, // Sudah format baku 24-jam
                                 location: row.lokasi || '',
                                 description: row.deskripsi || '',
-                                priority: row.prioritas || 'Sedang',
+                                priority: normalizePriority(row.prioritas),
                                 input_source: 'WEB_UPLOAD',
                                 is_completed: false,
                                 notification_minutes: notificationMinutes,
@@ -131,7 +149,7 @@ const uploadScheduleCSV = async (req, res) => {
                                 time: waktuMulai, // Sudah format baku 24-jam
                                 location: row.lokasi || '',
                                 description: row.deskripsi || '',
-                                priority: row.prioritas || 'Sedang',
+                                priority: normalizePriority(row.prioritas),
                                 input_source: 'WEB_UPLOAD',
                                 is_completed: false,
                                 notification_minutes: notificationMinutes,
@@ -148,7 +166,7 @@ const uploadScheduleCSV = async (req, res) => {
                                 end_time: waktuSelesai, // Sudah format baku 24-jam
                                 location: row.lokasi || '',
                                 description: row.deskripsi || '',
-                                priority: row.prioritas || 'Medium',
+                                priority: normalizePriority(row.prioritas),
                                 status: 'SCHEDULED',
                                 recurring_id: null,
                                 input_source: 'WEB_UPLOAD',
