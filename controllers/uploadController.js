@@ -11,14 +11,9 @@ const normalizeTime = (timeStr) => {
     let t = timeStr.trim().toLowerCase();
 
     // Regex untuk membaca pola: "1:00", "13:00", "1:00 pm", "01:00:00 pm" dll
-    // Match 1: Jam (1-2 digit)
-    // Match 2: Menit (2 digit)
-    // Match 3: Detik (diabaikan)
-    // Match 4: am/pm (opsional)
     const regex = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?$/;
     const match = t.match(regex);
 
-    // Jika formatnya sangat aneh dan tidak terbaca regex, kembalikan aslinya
     if (!match) return timeStr;
 
     let hours = parseInt(match[1], 10);
@@ -161,9 +156,10 @@ const uploadScheduleCSV = async (req, res) => {
                             collectionName = 'consultations';
                             scheduleData = {
                                 title: judul,
-                                date: tanggalFormattedYYYYMMDD, // PERHATIAN: Format YYYY-MM-DD
-                                start_time: waktuMulai, // Sudah format baku 24-jam
-                                end_time: waktuSelesai, // Sudah format baku 24-jam
+                                // --- [PERBAIKAN BUG 15] UBAH KE FORMAT DD/MM/YYYY ---
+                                date: tanggalFormattedDDMMYYYY,
+                                start_time: waktuMulai,
+                                end_time: waktuSelesai,
                                 location: row.lokasi || '',
                                 description: row.deskripsi || '',
                                 priority: normalizePriority(row.prioritas),
@@ -182,14 +178,12 @@ const uploadScheduleCSV = async (req, res) => {
                                 class_code: row.kode_kelas || '-',
                                 classroom: row.lokasi || '-',
                                 day_of_week: row.hari || '-',
-                                start_time: waktuMulai, // Sudah format baku 24-jam
-                                end_time: waktuSelesai, // Sudah format baku 24-jam
+                                start_time: waktuMulai,
+                                end_time: waktuSelesai,
                                 student_count: parseInt(row.jml_mhs) || 0,
-                                start_date: tanggalFormattedDDMMYYYY,
-                                // --- TAMBAHKAN 2 BARIS INI (SABUK PENGAMAN ANDROID) ---
+                                start_date: tanggalFormattedDDMMYYYY, // Format DD/MM/YYYY
                                 repetition_type: "COUNT",
                                 repetition_value: "1",
-                                // -----------------------------------------------------
                                 notification_minutes: notificationMinutes,
                                 updated_at: nowISO
                             };
