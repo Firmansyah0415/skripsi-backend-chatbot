@@ -1,5 +1,33 @@
 const model = require('../config/gemini');
 const db = require('../config/firebaseConfig');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// --- FUNGSI ANTI-503 (FALLBACK MODEL) ---
+const generateWithFallback = async (prompt) => {
+    try {
+        return await model.generateContent(prompt);
+    } catch (error) {
+        const isOverloaded = error.status === 503 ||
+            error.message.includes('503') ||
+            error.message.includes('high demand') ||
+            error.message.includes('Quota exceeded');
+
+        if (isOverloaded) {
+            console.warn("⚠️ Server Gemini Utama Penuh! Mengalihkan ke Model Cadangan (gemini-1.5-flash)...");
+            try {
+                const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+                const genAI = new GoogleGenerativeAI(apiKey);
+                const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+                return await fallbackModel.generateContent(prompt);
+            } catch (fallbackError) {
+                console.error("❌ Model cadangan juga gagal:", fallbackError.message);
+                throw fallbackError;
+            }
+        }
+        throw error;
+    }
+};
 
 // --- HELPER 1: Format Jadwal Mengajar ---
 const formatTeaching = (docs) => {
@@ -45,8 +73,6 @@ const formatConsultations = (docs) => {
         const data = doc.data();
         const status = data.status || "SCHEDULED";
 
-        // Ubah Label dari "Ket/Mhs" menjadi "Catatan/Topik"
-        // Agar AI mengerti ini adalah deskripsi sesi, bukan nama orang
         text += `- [SESI BIMBINGAN] Judul Sesi: "${data.title}". Tanggal: ${data.date}. Jam: ${data.start_time} s/d ${data.end_time}. Lokasi: ${data.location || 'Ruang Dosen'}. Catatan: ${data.description || '-'}. Status: ${status}.\n`;
     });
     return text;
@@ -62,7 +88,6 @@ const chatWithGemini = async (req, res) => {
 
         const finalName = userName || "Dosen";
 
-        // --- 1. SETTING WAKTU SYSTEM ---
         const now = new Date();
         const day = String(now.getDate()).padStart(2, '0');
         const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -71,7 +96,6 @@ const chatWithGemini = async (req, res) => {
         const minutes = String(now.getMinutes()).padStart(2, '0');
         const formattedNow = `${day}/${month}/${year} ${hours}:${minutes}`;
 
-        // --- 2. AMBIL DATA DARI FIRESTORE ---
         const userRef = db.collection('users').doc(uid);
 
         const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
@@ -81,13 +105,11 @@ const chatWithGemini = async (req, res) => {
             userRef.collection('consultations').get()
         ]);
 
-        // --- 3. FORMAT DATA MENJADI TEKS RAW ---
         const dataTeaching = formatTeaching(teachingSnap);
         const dataEvents = formatEvents(eventSnap);
         const dataTasks = formatTasks(taskSnap);
         const dataConsultations = formatConsultations(consultationSnap);
 
-        // --- 4. RAKIT KONTEKS DATA ---
         const contextData = `
         DATA RAW JADWAL DOSEN:
         
@@ -104,7 +126,6 @@ const chatWithGemini = async (req, res) => {
         ${dataConsultations}
         `;
 
-        // --- 5. BUAT PROMPT GEMINI (REVISI: GENERAL SLOT) ---
         const prompt = `
         Kamu adalah asisten dosen bernama "Lecturo Assistant".
         
@@ -157,8 +178,8 @@ const chatWithGemini = async (req, res) => {
         - Jika user hanya menyapa, sapa balik dan tawarkan untuk mengecek jadwal.
         `;
 
-        // --- 6. KIRIM KE GEMINI ---
-        const result = await model.generateContent(prompt);
+        // --- MENGGUNAKAN FALLBACK SAAT GENERATE CONTENT ---
+        const result = await generateWithFallback(prompt);
         const response = await result.response;
         const textReply = response.text();
 
@@ -202,7 +223,8 @@ const extractEvent = async (req, res) => {
         Teks: "${text}"
         `;
 
-        const result = await model.generateContent(prompt);
+        // --- MENGGUNAKAN FALLBACK SAAT GENERATE CONTENT ---
+        const result = await generateWithFallback(prompt);
         const response = await result.response;
         let cleanJson = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
 

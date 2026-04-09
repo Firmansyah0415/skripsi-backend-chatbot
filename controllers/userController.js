@@ -17,29 +17,33 @@ const syncUser = async (req, res) => {
             return res.status(400).json({ error: 'UID dan Nomor HP wajib ada' });
         }
 
-        const userRef = db.collection('users').doc(uid);
+        // ======================================================
+        // [PERBAIKAN BUG BOT AMNESIA]: MESIN CUCI NOMOR HP
+        // ======================================================
+        let cleanPhone = phone_number.replace(/\D/g, ''); // Hapus spasi, +, strip, dll (sisa angka)
 
-        // 1. AMBIL DATA LAMA DULU (PENTING!)
+        // Standarisasi paksa ke format internasional 62...
+        if (cleanPhone.startsWith('0')) {
+            cleanPhone = '62' + cleanPhone.slice(1);
+        } else if (!cleanPhone.startsWith('62')) {
+            cleanPhone = '62' + cleanPhone;
+        }
+        // ======================================================
+
+        const userRef = db.collection('users').doc(uid);
         const docSnapshot = await userRef.get();
         const existingData = docSnapshot.exists ? docSnapshot.data() : {};
 
-        // 2. SIAPKAN DATA BARU DENGAN LOGIKA PRIORITAS
-        // Logika: Ambil data dari Request (Android). 
-        // Jika Android kirim kosong, ambil dari Database (existingData).
-        // Jika Database juga kosong, baru pakai string kosong "".
-
         const userData = {
             uid: uid,
-            phone_number: phone_number,
-
-            // Perbaikan di sini:
+            // Gunakan nomor yang sudah dicuci bersih!
+            phone_number: cleanPhone,
             email: email || existingData.email || "",
             full_name: full_name || existingData.full_name || "",
             university: university || existingData.university || "",
             faculty: faculty || existingData.faculty || "",
             major: major || existingData.major || "",
             photo_url: photo_url || existingData.photo_url || "",
-
             role: "dosen",
             updated_at: new Date().toISOString()
         };

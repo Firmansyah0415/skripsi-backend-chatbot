@@ -3,48 +3,52 @@ const qrcode = require('qrcode-terminal');
 const { chatWithGemini } = require('./aiController');
 const db = require('../config/firebaseConfig');
 
-// --- PERBAIKAN: Deteksi OS secara otomatis ---
 const isWindows = process.platform === 'win32';
 const chromePath = isWindows
     ? 'C:\\Users\\LENOVO\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe'
-    : undefined; // Di Linux (VPS), undefined berarti pakai Chromium bawaan Puppeteer
+    : undefined;
 
 const client = new Client({
     authStrategy: new LocalAuth(),
+    webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-js/main/dist/wppconnect-wa.js',
+    },
     puppeteer: {
-        headless: true,
-        executablePath: chromePath, // <--- Gunakan variabel dinamis ini
+        headless: false,
+        executablePath: chromePath,
         args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--single-process',
-            '--no-zygote',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--disable-gpu'
-        ]
+            '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+            '--no-zygote', '--disable-gpu', '--disable-extensions', '--no-first-run',
+            '--no-default-browser-check', '--disable-web-security'
+        ],
     }
 });
 
 // --- FUNGSI PENCARI UID ---
-const findUserByPhone = async (cleanNumber) => {
-    // Pastikan input string
-    if (!cleanNumber) return null;
+const findUserByPhone = async (rawNumber) => {
+    if (!rawNumber) return null;
 
+    const cleanNumber = rawNumber.replace(/\D/g, '');
     console.log(`🔍 Mencari User di DB dengan dasar: ${cleanNumber}`);
+
     const usersRef = db.collection('users');
 
-    // 1. Cek format polosan (628...)
-    let snapshot = await usersRef.where('phone_number', '==', cleanNumber).limit(1).get();
+    // 1. CARI BERDASARKAN LID (Fitur Privasi WA Business)
+    let snapshot = await usersRef.where('whatsapp_lid', '==', cleanNumber).limit(1).get();
 
-    // 2. Cek format pakai PLUS (+628...)
+    // 2. CARI BERDASARKAN NOMOR HP NORMAL
+    if (snapshot.empty) {
+        snapshot = await usersRef.where('phone_number', '==', cleanNumber).limit(1).get();
+    }
+
+    // 3. Fallback format lokal/plus (Jaga-jaga)
     if (snapshot.empty) {
         const plusNumber = '+' + cleanNumber;
         snapshot = await usersRef.where('phone_number', '==', plusNumber).limit(1).get();
     }
 
-    // 3. Cek format lokal (08...)
+    // 4. Fallback jika depannya 62, coba cari 08...
     if (snapshot.empty && cleanNumber.startsWith('62')) {
         const localFormat = '0' + cleanNumber.substring(2);
         snapshot = await usersRef.where('phone_number', '==', localFormat).limit(1).get();
@@ -71,43 +75,93 @@ client.on('ready', () => {
     console.log('Bot siap melayani User yang terdaftar...');
 });
 
-// --- BAGIAN PENTING: PENANGANAN PESAN DENGAN ANTI-CRASH ---
+// --- BAGIAN PENTING: PENANGANAN PESAN ---
 client.on('message', async (msg) => {
-    // Filter pesan status
     if (msg.from === 'status@broadcast' || msg.from.includes('@newsletter')) return;
 
     let realNumber = '';
     let senderName = 'Unknown';
+    let isLid = false;
 
     try {
-        // --- COBA CARA 1: Pakai getContact() (Cara Ideal) ---
+        // [STRATEGI BARU: AMBIL DARI CONTACT DULU, JANGAN DARI msg.from]
         const contact = await msg.getContact();
-        realNumber = contact.number;
         senderName = contact.pushname || contact.name || "User";
 
-    } catch (err) {
-        // --- JIKA ERROR (Seperti kasus Anda tadi), JANGAN MATIKAN SERVER ---
-        console.warn("⚠️ Gagal mengambil Contact Info (Library Issue). Mencoba cara manual...");
-
-        // --- CARA 2: Ambil Manual dari msg.from ---
-        // msg.from biasanya: "62812345@c.us" atau "234234@lid"
-        if (msg.from.includes('@c.us')) {
-            realNumber = msg.from.replace('@c.us', '');
-            senderName = "User (Manual)";
+        // Terkadang contact.number berhasil menyelamatkan nomor asli (628...)
+        if (contact.number) {
+            realNumber = contact.number;
+            // Jika number yang dikembalikan adalah LID (15 digit tanpa 62 di depan)
+            if (realNumber.length >= 14 && !realNumber.startsWith('62')) {
+                isLid = true;
+            }
         } else {
-            console.error("❌ Pesan dari ID aneh (@lid) dan getContact gagal. Pesan diabaikan.");
-            return; // Nyerah, tidak bisa diproses
+            // Fallback ke msg.from jika contact.number kosong
+            if (msg.from.includes('@c.us') || msg.from.includes('@lid')) {
+                realNumber = msg.from.replace('@c.us', '').replace('@lid', '');
+                if (msg.from.includes('@lid') || (realNumber.length >= 14 && !realNumber.startsWith('62'))) {
+                    isLid = true;
+                }
+            } else {
+                return; // Abaikan grup
+            }
+        }
+    } catch (err) {
+        console.warn("⚠️ Gagal mengambil kontak. Fallback ekstrim...");
+        if (msg.from.includes('@c.us') || msg.from.includes('@lid')) {
+            realNumber = msg.from.replace('@c.us', '').replace('@lid', '');
+            senderName = "User (Manual)";
+            if (msg.from.includes('@lid') || (realNumber.length >= 14 && !realNumber.startsWith('62'))) {
+                isLid = true;
+            }
+        } else {
+            return;
         }
     }
 
-    console.log(`📩 Pesan Masuk dari: ${senderName} (${realNumber})`);
+    console.log(`📩 Pesan Masuk dari: ${senderName} (${realNumber}) [LID: ${isLid}]`);
 
     try {
         // --- PROSES 1: IDENTIFIKASI USER ---
         const user = await findUserByPhone(realNumber);
 
+        // --- [LOGIKA BARU: TAUTAN AKUN WA BUSINESS] ---
+        // Jika user tidak ditemukan, DAN pesan berisi "LINK "
+        if (!user && msg.body.toUpperCase().startsWith('LINK ')) {
+            const phoneToLink = msg.body.split(' ')[1];
+            if (phoneToLink) {
+                let cleanPhone = phoneToLink.replace(/\D/g, '');
+                if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+
+                const usersRef = db.collection('users');
+                const snapshot = await usersRef.where('phone_number', '==', cleanPhone).limit(1).get();
+
+                if (!snapshot.empty) {
+                    const doc = snapshot.docs[0];
+
+                    // Simpan LID misterius ini ke akun user agar dikenali seterusnya!
+                    await usersRef.doc(doc.id).set({ whatsapp_lid: realNumber }, { merge: true });
+
+                    // Kirim pesan balasan menggunakan client.sendMessage (lebih tangguh dari msg.reply)
+                    await client.sendMessage(msg.from, `✅ Berhasil! WhatsApp Anda telah ditautkan ke akun Lecturo.\n\nHalo *${doc.data().full_name}*, ada yang bisa dibantu?`);
+                    return;
+                } else {
+                    await client.sendMessage(msg.from, `❌ Nomor HP ${cleanPhone} belum terdaftar di Aplikasi Lecturo.`);
+                    return;
+                }
+            }
+        }
+
+        // Jika user masih tidak ditemukan
         if (!user) {
             console.log("❌ User tidak dikenal/belum terdaftar.");
+
+            // PERBAIKAN: Gunakan client.sendMessage ke msg.from agar WA tidak bingung dengan ID LID
+            try {
+                await client.sendMessage(msg.from, `Halo *${senderName}*!\nKarena kebijakan privasi WhatsApp Business, nomor HP Anda disembunyikan oleh sistem Meta.\n\nKetik *LINK NomorHP* (Contoh: *LINK 082292267396*) untuk menautkan chat ini dengan akun Lecturo Anda secara permanen.`);
+            } catch (replyErr) {
+                console.error("Gagal mengirim pesan balasan peringatan LINK:", replyErr);
+            }
             return;
         }
 
@@ -118,15 +172,21 @@ client.on('message', async (msg) => {
             body: {
                 message: msg.body,
                 uid: user.uid,
-                userName: user.name, // <--- PENTING: Kirim nama ke AI Controller
-                userRole: user.role  // (Opsional) Kirim role
+                userName: user.name,
+                userRole: user.role
             }
         };
+
         const res = {
-            json: (data) => {
+            json: async (data) => {
                 if (data.reply) {
-                    msg.reply(data.reply);
-                    console.log(`🤖 Membalas ke ${user.name}: Sukses`);
+                    // PERBAIKAN: Gunakan client.sendMessage
+                    try {
+                        await client.sendMessage(msg.from, data.reply);
+                        console.log(`🤖 Membalas ke ${user.name}: Sukses`);
+                    } catch (replyErr) {
+                        console.error(`🤖 Gagal membalas ke ${user.name}:`, replyErr);
+                    }
                 }
             },
             status: (code) => ({ json: (err) => console.error("Error AI:", err) })
@@ -139,11 +199,8 @@ client.on('message', async (msg) => {
     }
 });
 
-// --- TAMBAHAN: Global Error Handler untuk Puppeteer ---
-// Agar server tidak mati mendadak jika ada error browser
 process.on('unhandledRejection', (reason, p) => {
     console.error('Unhandled Rejection at:', p, 'reason:', reason);
-    // Jangan exit process
 });
 
 const startWhatsAppBot = () => {

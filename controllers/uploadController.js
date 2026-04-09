@@ -186,6 +186,10 @@ const uploadScheduleCSV = async (req, res) => {
                                 end_time: waktuSelesai, // Sudah format baku 24-jam
                                 student_count: parseInt(row.jml_mhs) || 0,
                                 start_date: tanggalFormattedDDMMYYYY,
+                                // --- TAMBAHKAN 2 BARIS INI (SABUK PENGAMAN ANDROID) ---
+                                repetition_type: "COUNT",
+                                repetition_value: "1",
+                                // -----------------------------------------------------
                                 notification_minutes: notificationMinutes,
                                 updated_at: nowISO
                             };
