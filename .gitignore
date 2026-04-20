@@ -5,7 +5,3 @@ firebase-key.json
 # WhatsApp Web JS Auth & Cache
 .wwebjs_auth/
 .wwebjs_cache/
-
-# Ignore Android APK files
-*.apk
-public/downloads/*.apk
