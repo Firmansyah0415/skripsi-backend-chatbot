@@ -130,7 +130,7 @@ const processReadSchedule = async (res, message, finalName, formattedNow, contex
 };
 
 // ============================================================================
-// 3. FUNGSI CREATE (MENAMBAH JADWAL BARU)
+// 3. FUNGSI CREATE (MENAMBAH JADWAL BARU - DENGAN VALIDASI PINTAR)
 // ============================================================================
 const processCreateSchedule = async (res, userRef, message) => {
     const prompt = `
@@ -138,20 +138,25 @@ const processCreateSchedule = async (res, userRef, message) => {
     
     Wajib kembalikan format JSON murni (tanpa markdown).
     {
-      "collection": "tasks" ATAU "events" ATAU "teaching_schedules" ATAU "consultations",
+      "is_data_complete": true atau false,
+      "collection": "tasks" ATAU "events" ATAU "teaching_schedules" ATAU "consultations" ATAU "none",
       "data": {
-        // isi sesuai kebutuhan struktur di bawah
+        // isi sesuai kebutuhan struktur di bawah jika data ada
       },
-      "reply": "Teks balasan ramah bahwa jadwal berhasil ditambahkan (gunakan emotikon)."
+      "reply": "Teks balasan untuk user."
     }
 
-    Aturan Isi "data":
-    - tasks: title, date (DD/MM/YYYY), time (HH:mm), priority (Tinggi/Sedang/Rendah), location, description.
-    - events: title, date (DD/MM/YYYY), time (HH:mm), priority, location, category.
-    - teaching_schedules: course_name, day_of_week, start_time, end_time, classroom.
-    - consultations: title, date (DD/MM/YYYY), start_time, end_time, location.
-    
-    (Biarkan field kosong berupa string "" jika tidak disebutkan user).
+    ATURAN VALIDASI (SANGAT PENTING):
+    - Jika user bertanya panduan atau cara menggunakan bot, jelaskan bahwa user bisa langsung memerintahkan bot seperti bicara dengan manusia. Contohkan: "Tolong ingatkan besok ada rapat prodi jam 9 pagi di Ruang Dosen".
+    - Untuk membuat jadwal, user WAJIB minimal menyebutkan: JUDUL (Title) dan WAKTU (Bisa Tanggal saja, atau Tanggal & Jam).
+    - Jika user HANYA bilang "Buat jadwal" tanpa judul/waktu, set "is_data_complete": false.
+    - Jika "is_data_complete" false, isi "reply" dengan pertanyaan sopan menanyakan data yang kurang. (Contoh: "Baik, mau ditambahkan jadwal apa? Tanggal dan jam berapa?"). Jangan isi data.
+    - Jika "is_data_complete" true, isi "reply" dengan konfirmasi sukses, dan isi "data" dengan:
+      > tasks: title, date (DD/MM/YYYY), time (HH:mm), priority (Tinggi/Sedang/Rendah), location, description.
+      > events: title, category (Rapat/Seminar/Lainnya), date (DD/MM/YYYY), time (HH:mm), priority, location.
+      > consultations: title, date (DD/MM/YYYY), start_time, end_time, location, status ("SCHEDULED").
+      > teaching_schedules: course_name, day_of_week, start_time, end_time, classroom.
+      (Prioritas default "Sedang" jika tidak disebut).
     `;
 
     const result = await generateWithFallback(prompt);
@@ -159,18 +164,27 @@ const processCreateSchedule = async (res, userRef, message) => {
 
     try {
         const aiData = JSON.parse(cleanJson);
-        const finalData = {
-            ...aiData.data,
-            input_source: 'WA_BOT',
-            updated_at: new Date().toISOString(),
-            is_completed: false,
-            notification_minutes: 15
-        };
-        await userRef.collection(aiData.collection).add(finalData);
-        return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+
+        // JIKA DATA LENGKAP -> SIMPAN KE DB
+        if (aiData.is_data_complete === true && aiData.collection !== 'none') {
+            const finalData = {
+                ...aiData.data,
+                input_source: 'WA_BOT',
+                updated_at: new Date().toISOString(),
+                is_completed: false,
+                notification_minutes: 15 // Default pengingat 15 menit
+            };
+            await userRef.collection(aiData.collection).add(finalData);
+            return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+        }
+        // JIKA DATA KURANG -> TANYA BALIK (TIDAK DISIMPAN KE DB)
+        else {
+            return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+        }
+
     } catch (e) {
         console.error("Gagal parse Create:", e);
-        return res.json({ status: 'error', reply: "Maaf, saya tidak menangkap detail jadwalnya. Bisa diulangi dengan lebih lengkap?\n\n🤖 *Lecturo Assistant*" });
+        return res.json({ status: 'error', reply: "Maaf, format jadwal tidak dapat saya pahami. Mohon sebutkan nama acara dan waktunya dengan jelas.\n\n🤖 *Lecturo Assistant*" });
     }
 };
 
