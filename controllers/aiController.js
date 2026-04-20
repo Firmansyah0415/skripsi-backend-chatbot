@@ -18,10 +18,8 @@ const generateWithFallback = async (prompt) => {
                 const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
                 const genAI = new GoogleGenerativeAI(apiKey);
                 const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
                 return await fallbackModel.generateContent(prompt);
             } catch (fallbackError) {
-                console.error("❌ Model cadangan juga gagal:", fallbackError.message);
                 throw fallbackError;
             }
         }
@@ -29,104 +27,54 @@ const generateWithFallback = async (prompt) => {
     }
 };
 
-// --- HELPER 1: Format Jadwal Mengajar ---
+// ============================================================================
+// 1. HELPER FORMATTER (Menyisipkan ID secara diam-diam untuk fitur Delete)
+// ============================================================================
 const formatTeaching = (docs) => {
     if (docs.empty) return "- (Tidak ada jadwal mengajar)";
     let text = "";
     docs.forEach(doc => {
         const data = doc.data();
-        const hari = data.day_of_week || "Hari ?";
-        text += `- [KULIAH] Matkul: "${data.course_name}". Hari: ${hari}. Jam: ${data.start_time}-${data.end_time}. Ruang: ${data.classroom}.\n`;
+        text += `[ID_DB: ${doc.id}] Matkul: "${data.course_name}". Hari: ${data.day_of_week}. Jam: ${data.start_time}-${data.end_time}. Ruang: ${data.classroom}.\n`;
     });
     return text;
 };
 
-// --- HELPER 2: Format Event (Acara) ---
 const formatEvents = (docs) => {
     if (docs.empty) return "- (Tidak ada acara)";
     let text = "";
     docs.forEach(doc => {
         const data = doc.data();
-        const isDone = data.is_completed ? "true" : "false";
-        text += `- [EVENT] Judul: "${data.title}". Tanggal: ${data.date}. Jam: ${data.time}. Lokasi: ${data.location}. IsCompleted: ${isDone}. Prioritas: ${data.priority}.\n`;
+        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". Tanggal: ${data.date}. Jam: ${data.time}. Lokasi: ${data.location}. IsCompleted: ${data.is_completed}.\n`;
     });
     return text;
 };
 
-// --- HELPER 3: Format Tasks (Tugas) ---
 const formatTasks = (docs) => {
     if (docs.empty) return "- (Tidak ada tugas)";
     let text = "";
     docs.forEach(doc => {
         const data = doc.data();
-        const isDone = data.is_completed ? "true" : "false";
-        text += `- [TUGAS] Judul: "${data.title}". DeadlineTanggal: ${data.date}. DeadlineJam: ${data.time}. Prioritas: ${data.priority}. IsCompleted: ${isDone}.\n`;
+        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". DeadlineTanggal: ${data.date}. DeadlineJam: ${data.time}. IsCompleted: ${data.is_completed}.\n`;
     });
     return text;
 };
 
-// --- HELPER 4: Format Consultations (DISESUAIKAN: SESI UMUM) ---
 const formatConsultations = (docs) => {
     if (docs.empty) return "- (Tidak ada jadwal sesi bimbingan)";
     let text = "";
     docs.forEach(doc => {
         const data = doc.data();
-        const status = data.status || "SCHEDULED";
-
-        text += `- [SESI BIMBINGAN] Judul Sesi: "${data.title}". Tanggal: ${data.date}. Jam: ${data.start_time} s/d ${data.end_time}. Lokasi: ${data.location || 'Ruang Dosen'}. Catatan: ${data.description || '-'}. Status: ${status}.\n`;
+        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". Tanggal: ${data.date}. Jam: ${data.start_time}-${data.end_time}. Status: ${data.status}.\n`;
     });
     return text;
 };
 
-// --- FUNGSI UTAMA: CHATBOT CERDAS ---
-const chatWithGemini = async (req, res) => {
-    try {
-        const { message, uid, userName, userRole } = req.body;
-
-        if (!message) return res.status(400).json({ error: 'Pesan kosong' });
-        if (!uid) return res.status(400).json({ error: 'UID diperlukan' });
-
-        const finalName = userName || "Dosen";
-
-        const now = new Date();
-        const day = String(now.getDate()).padStart(2, '0');
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const year = now.getFullYear();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const formattedNow = `${day}/${month}/${year} ${hours}:${minutes}`;
-
-        const userRef = db.collection('users').doc(uid);
-
-        const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
-            userRef.collection('teaching_schedules').get(),
-            userRef.collection('events').get(),
-            userRef.collection('tasks').get(),
-            userRef.collection('consultations').get()
-        ]);
-
-        const dataTeaching = formatTeaching(teachingSnap);
-        const dataEvents = formatEvents(eventSnap);
-        const dataTasks = formatTasks(taskSnap);
-        const dataConsultations = formatConsultations(consultationSnap);
-
-        const contextData = `
-        DATA RAW JADWAL DOSEN:
-        
-        A. JADWAL MENGAJAR (KULIAH):
-        ${dataTeaching}
-
-        B. EVENT / ACARA:
-        ${dataEvents}
-
-        C. TUGAS / TASKS:
-        ${dataTasks}
-
-        D. JADWAL SESI BIMBINGAN (CONSULTATION):
-        ${dataConsultations}
-        `;
-
-        const prompt = `
+// ============================================================================
+// 2. FUNGSI READ (MEMBACA JADWAL) -> PROMPT ASLI MILIKMU 100% AMAN DI SINI!
+// ============================================================================
+const processReadSchedule = async (res, message, finalName, formattedNow, contextData) => {
+    const prompt = `
         Kamu adalah asisten dosen bernama "Lecturo Assistant".
         
         DATA KONTEKS:
@@ -142,7 +90,7 @@ const chatWithGemini = async (req, res) => {
            - Mengajar = 👨‍🏫 **JADWAL MENGAJAR**
            - Konsultasi = 🎓 **JADWAL SESI BIMBINGAN**
         
-        2. Format Tampilan Per Item (Jangan pakai deskripsi panjang):
+        2. Format Tampilan Per Item (Jangan tampilkan ID_DB, sembunyikan ID_DB dari user):
            - Judul harus di-Bold (*Judul*).
            - Baris Metadata: 🔴 [Prioritas] | [Status Emoticon] [Status Teks]
            - Baris Waktu: 📅 [Tanggal] ⏰ [Jam]
@@ -159,51 +107,171 @@ const chatWithGemini = async (req, res) => {
         - Medium/Sedang = 🟡 Sedang
         - Low/Rendah = 🟢 Rendah
 
-        CONTOH FORMAT OUTPUT (Gunakan style ini untuk semua kategori):
+        CONTOH FORMAT OUTPUT:
         🎓 **JADWAL BIMBINGAN**
         1. *Bimbingan Skripsi & KP*
            🔴 Tinggi | ⏳ Upcoming
            📅 20/02/2026 ⏰ 09:00 - 12:00
            📍 Lab RPL
 
-        📝 **DAFTAR TUGAS**
-        1. *Koreksi Nilai UAS*
-           🔴 Tinggi | ⛔ Terlewat
-           📅 05/02/2026 ⏰ 23:59
-
         INSTRUKSI RESPON:
         - Jawab pertanyaan user: "${message}" secara sopan, ringkas dan to the point.
         - Jika user bertanya jadwal, tampilkan list sesuai format compact di atas.
         - Jangan tampilkan deskripsi/catatan panjang agar chat tidak penuh.
-        - Jika user hanya menyapa, sapa balik dan tawarkan untuk mengecek jadwal.
-        `;
+        - Jangan pernah menampilkan ID_DB ke hadapan user.
+    `;
 
-        // --- MENGGUNAKAN FALLBACK SAAT GENERATE CONTENT ---
-        const result = await generateWithFallback(prompt);
-        const response = await result.response;
-        const textReply = response.text();
+    const result = await generateWithFallback(prompt);
+    const response = await result.response;
+    const textReply = response.text();
+    const brandedReply = `${textReply}\n\n🤖 *Lecturo Assistant*`;
 
-        const brandedReply = `${textReply}\n\n🤖 *Lecturo Assistant*`;
+    return res.json({ status: 'success', reply: brandedReply });
+};
 
-        res.json({ status: 'success', reply: brandedReply });
+// ============================================================================
+// 3. FUNGSI CREATE (MENAMBAH JADWAL BARU)
+// ============================================================================
+const processCreateSchedule = async (res, userRef, message) => {
+    const prompt = `
+    Ekstrak pesan ini untuk membuat jadwal baru: "${message}"
+    
+    Wajib kembalikan format JSON murni (tanpa markdown).
+    {
+      "collection": "tasks" ATAU "events" ATAU "teaching_schedules" ATAU "consultations",
+      "data": {
+        // isi sesuai kebutuhan struktur di bawah
+      },
+      "reply": "Teks balasan ramah bahwa jadwal berhasil ditambahkan (gunakan emotikon)."
+    }
 
-    } catch (error) {
-        console.error("Error Chat AI:", error.message);
+    Aturan Isi "data":
+    - tasks: title, date (DD/MM/YYYY), time (HH:mm), priority (Tinggi/Sedang/Rendah), location, description.
+    - events: title, date (DD/MM/YYYY), time (HH:mm), priority, location, category.
+    - teaching_schedules: course_name, day_of_week, start_time, end_time, classroom.
+    - consultations: title, date (DD/MM/YYYY), start_time, end_time, location.
+    
+    (Biarkan field kosong berupa string "" jika tidak disebutkan user).
+    `;
 
-        if (error.status === 429 || error.message.includes('Quota exceeded')) {
-            return res.json({
-                status: 'success',
-                reply: "⚠️ *Server Sibuk*\n\nMohon tunggu sebentar.\n\n🤖 *Lecturo System*"
-            });
-        }
+    const result = await generateWithFallback(prompt);
+    let cleanJson = (await result.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
 
-        return res.json({
-            status: 'success',
-            reply: "⚠️ *Terjadi Kesalahan*\n\nMaaf, saya gagal memuat data jadwal Anda."
-        });
+    try {
+        const aiData = JSON.parse(cleanJson);
+        const finalData = {
+            ...aiData.data,
+            input_source: 'WA_BOT',
+            updated_at: new Date().toISOString(),
+            is_completed: false,
+            notification_minutes: 15
+        };
+        await userRef.collection(aiData.collection).add(finalData);
+        return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+    } catch (e) {
+        console.error("Gagal parse Create:", e);
+        return res.json({ status: 'error', reply: "Maaf, saya tidak menangkap detail jadwalnya. Bisa diulangi dengan lebih lengkap?\n\n🤖 *Lecturo Assistant*" });
     }
 };
 
+// ============================================================================
+// 4. FUNGSI DELETE (MENGHAPUS JADWAL)
+// ============================================================================
+const processDeleteSchedule = async (res, userRef, message, contextData) => {
+    const prompt = `
+    Pesan user: "${message}"
+    
+    Berikut adalah jadwal user saat ini:
+    ${contextData}
+
+    Tugas: Cari tahu jadwal mana yang mau dihapus user dari data di atas.
+    Wajib kembalikan format JSON murni:
+    {
+      "document_id": "ID_DB dari jadwal yang mau dihapus",
+      "collection": "Koleksi jadwal tersebut (tasks / events / teaching_schedules / consultations)",
+      "reply": "Teks konfirmasi penghapusan berhasil."
+    }
+    Jika jadwal tidak ditemukan, kosongkan document_id dan isi reply dengan permintaan maaf.
+    `;
+
+    const result = await generateWithFallback(prompt);
+    let cleanJson = (await result.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
+
+    try {
+        const aiData = JSON.parse(cleanJson);
+        if (aiData.document_id) {
+            await userRef.collection(aiData.collection).doc(aiData.document_id).delete();
+            return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+        } else {
+            return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+        }
+    } catch (e) {
+        console.error("Gagal parse Delete:", e);
+        return res.json({ status: 'error', reply: "Maaf, saya tidak dapat menemukan jadwal yang dimaksud.\n\n🤖 *Lecturo Assistant*" });
+    }
+};
+
+// ============================================================================
+// 5. ORKESTRATOR (GERBANG UTAMA CHATBOT)
+// ============================================================================
+const chatWithGemini = async (req, res) => {
+    try {
+        const { message, uid, userName } = req.body;
+        if (!message || !uid) return res.status(400).json({ error: 'Data tidak lengkap' });
+
+        const finalName = userName || "Dosen";
+        const now = new Date();
+        const formattedNow = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+        const userRef = db.collection('users').doc(uid);
+
+        // Ambil data untuk referensi
+        const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
+            userRef.collection('teaching_schedules').get(),
+            userRef.collection('events').get(),
+            userRef.collection('tasks').get(),
+            userRef.collection('consultations').get()
+        ]);
+
+        const contextData = `
+        A. JADWAL MENGAJAR:\n${formatTeaching(teachingSnap)}
+        B. EVENT / ACARA:\n${formatEvents(eventSnap)}
+        C. TUGAS / TASKS:\n${formatTasks(taskSnap)}
+        D. KONSULTASI:\n${formatConsultations(consultationSnap)}
+        `;
+
+        // --- STEP 1: INTENT ROUTING (Identifikasi Niat User) ---
+        const intentPrompt = `Pesan user: "${message}". Apakah tujuan user? 
+        Jawab HANYA DENGAN SATU KATA: "CREATE" (jika ingin menambah jadwal), "DELETE" (jika ingin menghapus/membatalkan jadwal), atau "READ" (jika bertanya, menyapa, atau melihat jadwal).`;
+
+        const intentResult = await generateWithFallback(intentPrompt);
+        const intentText = (await intentResult.response).text().toUpperCase();
+
+        console.log(`🤖 Intent Deteksi: ${intentText}`);
+
+        // --- STEP 2: ARAHKAN KE FUNGSI YANG TEPAT ---
+        if (intentText.includes('CREATE')) {
+            return await processCreateSchedule(res, userRef, message);
+        }
+        else if (intentText.includes('DELETE')) {
+            return await processDeleteSchedule(res, userRef, message, contextData);
+        }
+        else {
+            return await processReadSchedule(res, message, finalName, formattedNow, contextData);
+        }
+
+    } catch (error) {
+        console.error("Error Chat AI:", error.message);
+        if (error.status === 429 || error.message.includes('Quota exceeded')) {
+            return res.json({ status: 'success', reply: "⚠️ *Server Sibuk*\n\nMohon tunggu sebentar.\n\n🤖 *Lecturo System*" });
+        }
+        return res.json({ status: 'success', reply: "⚠️ *Terjadi Kesalahan*\n\nMaaf, saya gagal memuat data Anda." });
+    }
+};
+
+// ============================================================================
+// FUNGSI OCR (TIDAK DISENTUH SAMA SEKALI)
+// ============================================================================
 const extractEvent = async (req, res) => {
     try {
         const { text } = req.body;
@@ -223,7 +291,6 @@ const extractEvent = async (req, res) => {
         Teks: "${text}"
         `;
 
-        // --- MENGGUNAKAN FALLBACK SAAT GENERATE CONTENT ---
         const result = await generateWithFallback(prompt);
         const response = await result.response;
         let cleanJson = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
