@@ -1,45 +1,63 @@
 const { client } = require('./whatsappClient'); // Import bot WA
 const admin = require('firebase-admin');
+const db = require('../config/firebaseConfig'); // <-- WAJIB IMPORT DATABASE
 
 const otpStore = new Map();
 
 // --- PERBAIKAN 1: FORMATTER LEBIH PINTAR ---
 const formatPhoneNumber = (number) => {
-    let formatted = number.replace(/\D/g, ''); // Hapus semua karakter non-angka
+    let formatted = number.replace(/\D/g, '');
 
     if (formatted.startsWith('0')) {
-        // Ubah 08xx jadi 628xx
         formatted = '62' + formatted.slice(1);
     } else if (!formatted.startsWith('62')) {
-        // Jika user input 812xx (lupa 0 atau 62), kita tambahkan 62
         formatted = '62' + formatted;
     }
-
-    // Hasil akhirnya pasti depannya 62...
     return formatted;
 };
 
 // 1. REQUEST OTP
 const requestOtp = async (req, res) => {
     try {
-        const { phone_number } = req.body;
+        // Ambil penanda 'source' dari request (Hanya web yang mengirim ini)
+        const { phone_number, source } = req.body;
 
         if (!phone_number) {
             return res.status(400).json({ status: 'error', message: 'Nomor HP wajib diisi' });
         }
 
-        // 1. Format Nomor (Pastikan ada 62 di depan)
         const formattedPhone = formatPhoneNumber(phone_number);
+        console.log(`📡 Request OTP untuk: ${formattedPhone} (Source: ${source || 'mobile'})`);
 
-        console.log(`📡 Request OTP untuk: ${formattedPhone}`);
+        // ==============================================================
+        // 🛡️ FITUR KEAMANAN KHUSUS WEB PORTAL (Mencegah Spam)
+        // ==============================================================
+        if (source === 'web') {
+            const cleanNumber = formattedPhone.startsWith('62') ? formattedPhone.substring(2) : formattedPhone;
+            const usersRef = db.collection('users');
+
+            // Cek di Firestore apakah nomor ini sudah pernah registrasi
+            let snapshot = await usersRef.where('phone_number', '==', cleanNumber).limit(1).get();
+            if (snapshot.empty) snapshot = await usersRef.where('phone_number', '==', '0' + cleanNumber).limit(1).get();
+            if (snapshot.empty) snapshot = await usersRef.where('phone_number', '==', '62' + cleanNumber).limit(1).get();
+            if (snapshot.empty) snapshot = await usersRef.where('phone_number', '==', '+' + formattedPhone).limit(1).get();
+
+            if (snapshot.empty) {
+                console.log(`❌ Akses Web Ditolak: Nomor belum terdaftar (${formattedPhone})`);
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'Akses ditolak. Nomor ini belum terdaftar di aplikasi Lecturo. Silakan daftar via Android terlebih dahulu.'
+                });
+            }
+        }
+        // ==============================================================
 
         // 2. Cek Kesiapan Bot
         if (!client.info) {
             return res.status(503).json({ status: 'error', message: 'Bot WhatsApp belum siap. Tunggu sebentar.' });
         }
 
-        // --- PERBAIKAN 2: VALIDASI NOMOR KE SERVER WA (PENTING!) ---
-        // Ini mencegah error "No LID" jika nomor salah/tidak punya WA
+        // --- PERBAIKAN 2: VALIDASI NOMOR KE SERVER WA ---
         const isRegistered = await client.getNumberId(formattedPhone);
 
         if (!isRegistered) {
@@ -50,10 +68,7 @@ const requestOtp = async (req, res) => {
             });
         }
 
-        // Ambil ID yang valid dari WhatsApp (format: 628xx@c.us)
         const chatId = isRegistered._serialized;
-
-        // 3. Generate OTP
         const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
         otpStore.set(formattedPhone, {
@@ -63,9 +78,7 @@ const requestOtp = async (req, res) => {
 
         console.log(`🔐 OTP Generated: ${otpCode} -> ${chatId}`);
 
-        // 4. Kirim Pesan
         const message = `*KODE VERIFIKASI LECTURO*\n\nKode OTP Anda adalah: *${otpCode}*\n\nJangan berikan kode ini kepada siapa pun.`;
-
         await client.sendMessage(chatId, message);
 
         res.json({
@@ -80,14 +93,11 @@ const requestOtp = async (req, res) => {
     }
 };
 
-// 2. VERIFY OTP
+// 2. VERIFY OTP (Tidak ada yang diubah, tetap sama)
 const verifyOtp = async (req, res) => {
     try {
         const { phone_number, otp_code } = req.body;
-
-        // Pastikan format nomor sama persis dengan saat Request OTP
         const formattedPhone = formatPhoneNumber(phone_number);
-
         const storedData = otpStore.get(formattedPhone);
 
         if (!storedData) {
@@ -105,7 +115,6 @@ const verifyOtp = async (req, res) => {
 
         otpStore.delete(formattedPhone);
 
-        // --- FIREBASE LOGIC ---
         let uid;
         const firebasePhone = `+${formattedPhone}`;
 

@@ -70,33 +70,63 @@ function downloadTemplate() {
     document.body.removeChild(link);
 }
 
-document.getElementById('section-login').addEventListener('submit', async function (e) {
+// ==========================================
+// LOGIKA MODAL POPUP (BARU)
+// ==========================================
+const confirmModal = document.getElementById('confirmModal');
+const confirmPhoneNumber = document.getElementById('confirmPhoneNumber');
+const btnConfirmSend = document.getElementById('btnConfirmSend');
+let pendingPhoneNumber = "";
+
+function openModal(phone) {
+    pendingPhoneNumber = phone;
+    confirmPhoneNumber.innerText = phone;
+    confirmModal.style.display = 'flex'; // Munculkan popup
+}
+
+function closeModal() {
+    confirmModal.style.display = 'none'; // Sembunyikan popup
+}
+
+// 1. CEGAT FORM LOGIN (Tampilkan Popup)
+document.getElementById('section-login').addEventListener('submit', function (e) {
     e.preventDefault();
     const phone = document.getElementById('phone').value;
+    hideAlert();
+    openModal(phone); // Buka popup konfirmasi
+});
+
+// 2. EKSEKUSI API SETELAH DIKONFIRMASI
+btnConfirmSend.addEventListener('click', async function () {
+    closeModal(); // Tutup popup
+
     const btn = document.getElementById('btnRequestOtp');
-    btn.disabled = true; btn.innerText = "Mengirim..."; hideAlert();
+    btn.disabled = true;
+    btn.innerText = "Mengecek Nomor...";
 
     try {
         const response = await fetch('/api/auth/request-otp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone_number: phone })
+            body: JSON.stringify({ phone_number: pendingPhoneNumber, source: 'web' })
         });
         const result = await response.json();
 
         if (response.ok && result.status === 'success') {
-            currentUserPhone = phone;
+            currentUserPhone = pendingPhoneNumber;
             showAlert("OTP berhasil dikirim ke WhatsApp Anda.");
             document.getElementById('section-login').style.display = 'none';
             document.getElementById('section-otp').style.display = 'block';
             document.getElementById('form-subtitle').innerText = "Verifikasi Kode OTP";
         } else {
-            showAlert(result.message || "Gagal mengirim OTP.", true);
+            // Tampilkan pesan error dari Backend (misal: "Nomor belum terdaftar")
+            showAlert(`<strong>Ditolak:</strong> ${result.message}`, true);
         }
     } catch (error) {
-        showAlert("Gagal terhubung ke server.", true);
+        showAlert("Gagal terhubung ke server. Coba lagi.", true);
     } finally {
-        btn.disabled = false; btn.innerText = "Kirim OTP ke WhatsApp";
+        btn.disabled = false;
+        btn.innerText = "Kirim OTP ke WhatsApp";
     }
 });
 

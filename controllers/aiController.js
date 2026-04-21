@@ -132,8 +132,10 @@ const processReadSchedule = async (res, message, finalName, formattedNow, contex
 // ============================================================================
 // 3. FUNGSI CREATE (MENAMBAH JADWAL BARU - DENGAN VALIDASI PINTAR)
 // ============================================================================
-const processCreateSchedule = async (res, userRef, message) => {
+const processCreateSchedule = async (res, userRef, message, formattedNow) => {
     const prompt = `
+    WAKTU SAAT INI (SERVER): ${formattedNow}
+    
     Ekstrak pesan ini untuk membuat jadwal baru: "${message}"
     
     Wajib kembalikan format JSON murni (tanpa markdown).
@@ -141,22 +143,26 @@ const processCreateSchedule = async (res, userRef, message) => {
       "is_data_complete": true atau false,
       "collection": "tasks" ATAU "events" ATAU "teaching_schedules" ATAU "consultations" ATAU "none",
       "data": {
-        // isi sesuai kebutuhan struktur di bawah jika data ada
+        // isi sesuai kebutuhan struktur di bawah
       },
       "reply": "Teks balasan untuk user."
     }
 
     ATURAN VALIDASI (SANGAT PENTING):
-    - Jika user bertanya panduan atau cara menggunakan bot, jelaskan bahwa user bisa langsung memerintahkan bot seperti bicara dengan manusia. Contohkan: "Tolong ingatkan besok ada rapat prodi jam 9 pagi di Ruang Dosen".
-    - Untuk membuat jadwal, user WAJIB minimal menyebutkan: JUDUL (Title) dan WAKTU (Bisa Tanggal saja, atau Tanggal & Jam).
-    - Jika user HANYA bilang "Buat jadwal" tanpa judul/waktu, set "is_data_complete": false.
-    - Jika "is_data_complete" false, isi "reply" dengan pertanyaan sopan menanyakan data yang kurang. (Contoh: "Baik, mau ditambahkan jadwal apa? Tanggal dan jam berapa?"). Jangan isi data.
-    - Jika "is_data_complete" true, isi "reply" dengan konfirmasi sukses, dan isi "data" dengan:
+    - Hitung tanggal secara akurat berdasarkan WAKTU SAAT INI (${formattedNow}).
+    - JANGAN PERNAH MENGGUNAKAN TANGGAL DI MASA LALU. Selalu gunakan tahun berjalan (2026 atau lebih).
+    - Jika user bertanya panduan, jelaskan cara pakai bot secara singkat.
+    - Untuk membuat jadwal, user WAJIB minimal menyebutkan: JUDUL (Title) dan WAKTU (Tanggal/Jam).
+    - Jika "is_data_complete" false, isi "reply" dengan pertanyaan meminta data yang kurang.
+    - Jika "is_data_complete" true, isi "data" dengan:
       > tasks: title, date (DD/MM/YYYY), time (HH:mm), priority (Tinggi/Sedang/Rendah), location, description.
-      > events: title, category (Rapat/Seminar/Lainnya), date (DD/MM/YYYY), time (HH:mm), priority, location.
-      > consultations: title, date (DD/MM/YYYY), start_time, end_time, location, status ("SCHEDULED").
+      > events: title, category (Rapat/Seminar/Lainnya), date (DD/MM/YYYY), time (HH:mm), priority, location, description.
+      > consultations: title, date (DD/MM/YYYY), start_time, end_time, location, description, status ("SCHEDULED").
       > teaching_schedules: course_name, day_of_week, start_time, end_time, classroom.
-      (Prioritas default "Sedang" jika tidak disebut).
+
+    ATURAN PENGISIAN FIELD KOSONG (WAJIB):
+    Jika user tidak menyebutkan lokasi atau deskripsi, KAMU WAJIB MENGISINYA DENGAN STRING KOSONG "".
+    JANGAN PERNAH menggunakan null, dan JANGAN PERNAH menghilangkan atribut tersebut dari JSON!
     `;
 
     const result = await generateWithFallback(prompt);
@@ -167,13 +173,27 @@ const processCreateSchedule = async (res, userRef, message) => {
 
         // JIKA DATA LENGKAP -> SIMPAN KE DB
         if (aiData.is_data_complete === true && aiData.collection !== 'none') {
+
+            // --- 🛡️ SABUK PENGAMAN (SANITIZER) ---
+            // 1. Ubah semua nilai null / undefined dari Gemini menjadi string kosong ""
+            const sanitizedData = {};
+            for (const key in aiData.data) {
+                sanitizedData[key] = (aiData.data[key] === null || aiData.data[key] === undefined) ? "" : aiData.data[key];
+            }
+
+            // 2. Paksa field 'description' dan 'location' ADA, meskipun Gemini lupa membuatnya (kasus 9 data)
+            if (!('description' in sanitizedData)) sanitizedData.description = "";
+            if (!('location' in sanitizedData)) sanitizedData.location = "";
+
+            // Gabungkan dengan default value Lecturo
             const finalData = {
-                ...aiData.data,
+                ...sanitizedData,
                 input_source: 'WA_BOT',
                 updated_at: new Date().toISOString(),
                 is_completed: false,
                 notification_minutes: 15 // Default pengingat 15 menit
             };
+
             await userRef.collection(aiData.collection).add(finalData);
             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
         }
@@ -234,8 +254,20 @@ const chatWithGemini = async (req, res) => {
         if (!message || !uid) return res.status(400).json({ error: 'Data tidak lengkap' });
 
         const finalName = userName || "Dosen";
-        const now = new Date();
-        const formattedNow = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        // GANTI DENGAN KODE SABUK PENGAMAN ZONA WAKTU INI:
+        const formatter = new Intl.DateTimeFormat('id-ID', {
+            timeZone: 'Asia/Makassar',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+
+        // Hasilnya otomatis akurat (Sesuai waktu asli Makassar)
+        let formattedNow = formatter.format(new Date());
+        formattedNow = formattedNow.replace(/\./g, ':'); // Jaga-jaga jika format id-ID memakai titik untuk jam
 
         const userRef = db.collection('users').doc(uid);
 
@@ -265,7 +297,7 @@ const chatWithGemini = async (req, res) => {
 
         // --- STEP 2: ARAHKAN KE FUNGSI YANG TEPAT ---
         if (intentText.includes('CREATE')) {
-            return await processCreateSchedule(res, userRef, message);
+            return await processCreateSchedule(res, userRef, message, formattedNow);
         }
         else if (intentText.includes('DELETE')) {
             return await processDeleteSchedule(res, userRef, message, contextData);
