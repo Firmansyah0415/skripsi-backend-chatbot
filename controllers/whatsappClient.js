@@ -15,7 +15,7 @@ const client = new Client({
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-js/main/dist/wppconnect-wa.js',
     },
     puppeteer: {
-        headless: false,
+        headless: true,
         executablePath: chromePath,
         args: [
             '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
