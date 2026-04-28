@@ -321,7 +321,7 @@ const chatWithGemini = async (req, res) => {
 };
 
 // ============================================================================
-// FUNGSI OCR (TIDAK DISENTUH SAMA SEKALI)
+// FUNGSI OCR (EKSTRAKSI EVENT DARI GAMBAR/PDF)
 // ============================================================================
 const extractEvent = async (req, res) => {
     try {
@@ -329,16 +329,19 @@ const extractEvent = async (req, res) => {
         if (!text) return res.status(400).json({ error: 'Teks input kosong' });
 
         const prompt = `
-        Analisis teks ini untuk jadwal acara/akademik. Ekstrak ke JSON:
+        Analisis teks berikut untuk jadwal acara/akademik. Ekstrak ke format JSON murni:
         - "title": Judul acara.
         - "category": "Rapat, Seminar, Webinar, Workshop, Penelitian, atau Lainnya".
-        - "date": format "dd/MM/yyyy".
-        - "time": format "HH:mm".
-        - "end_time": format "HH:mm" (Estimasi 1 jam jika tidak ada).
-        - "location": Lokasi.
-        - "description": Ringkasan.
+        - "date": format "DD/MM/YYYY".
+        - "time": Waktu mulai (format "HH:mm"). Jika teks memiliki rentang (contoh: "19.00 - 21.00"), maka ini adalah "19:00".
+        - "end_time": Waktu selesai (format "HH:mm"). Jika teks memiliki rentang (contoh: "19.00 - 21.00" atau "19:00 s.d 21:00"), AMBIL NILAI AKHIRNYA (berarti "21:00"). Jika benar-benar tidak ada indikasi waktu selesai, WAJIB isi dengan estimasi 1 jam setelah waktu mulai.
+        - "location": Lokasi acara.
+        - "description": Ringkasan atau informasi tambahan.
 
-        Aturan: Isi string kosong "" jika data tidak ada. Hanya return JSON murni.
+        Aturan Ekstraksi: 
+        1. Isi string kosong "" jika data tidak ada, jangan gunakan null.
+        2. Abaikan zona waktu seperti WITA/WIB, cukup ambil angkanya.
+        3. Hanya return JSON murni tanpa markdown \`\`\`json.
 
         Teks: "${text}"
         `;
