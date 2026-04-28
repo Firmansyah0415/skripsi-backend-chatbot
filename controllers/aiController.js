@@ -2,7 +2,6 @@ const model = require('../config/gemini');
 const db = require('../config/firebaseConfig');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// --- FUNGSI ANTI-503 (FALLBACK MODEL) ---
 const generateWithFallback = async (prompt) => {
     try {
         return await model.generateContent(prompt);
@@ -27,8 +26,16 @@ const generateWithFallback = async (prompt) => {
     }
 };
 
+// --- FUNGSI SABUK PENGAMAN (Otomatis Tambah 1 Jam jika end_time kosong) ---
+const addOneHour = (timeStr) => {
+    if (!timeStr || !timeStr.includes(':')) return timeStr || '';
+    let [h, m] = timeStr.split(':');
+    let hour = (parseInt(h, 10) + 1) % 24;
+    return `${hour.toString().padStart(2, '0')}:${m}`;
+};
+
 // ============================================================================
-// 1. HELPER FORMATTER (Menyisipkan ID secara diam-diam untuk fitur Delete)
+// 1. HELPER FORMATTER 
 // ============================================================================
 const formatTeaching = (docs) => {
     if (docs.empty) return "- (Tidak ada jadwal mengajar)";
@@ -45,7 +52,8 @@ const formatEvents = (docs) => {
     let text = "";
     docs.forEach(doc => {
         const data = doc.data();
-        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". Tanggal: ${data.date}. Jam: ${data.time}. Lokasi: ${data.location}. IsCompleted: ${data.is_completed}.\n`;
+        // PERBAIKAN: Menambahkan end_time ke konteks baca AI
+        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". Tanggal: ${data.date}. Jam: ${data.time}-${data.end_time || ''}. Lokasi: ${data.location}. IsCompleted: ${data.is_completed}.\n`;
     });
     return text;
 };
@@ -55,7 +63,8 @@ const formatTasks = (docs) => {
     let text = "";
     docs.forEach(doc => {
         const data = doc.data();
-        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". DeadlineTanggal: ${data.date}. DeadlineJam: ${data.time}. IsCompleted: ${data.is_completed}.\n`;
+        // PERBAIKAN: Menambahkan end_time ke konteks baca AI
+        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". DeadlineTanggal: ${data.date}. Jam: ${data.time}-${data.end_time || ''}. IsCompleted: ${data.is_completed}.\n`;
     });
     return text;
 };
@@ -71,7 +80,7 @@ const formatConsultations = (docs) => {
 };
 
 // ============================================================================
-// 2. FUNGSI READ (MEMBACA JADWAL) -> PROMPT ASLI MILIKMU 100% AMAN DI SINI!
+// 2. FUNGSI READ (MEMBACA JADWAL)
 // ============================================================================
 const processReadSchedule = async (res, message, finalName, formattedNow, contextData) => {
     const prompt = `
@@ -93,7 +102,7 @@ const processReadSchedule = async (res, message, finalName, formattedNow, contex
         2. Format Tampilan Per Item (Jangan tampilkan ID_DB, sembunyikan ID_DB dari user):
            - Judul harus di-Bold (*Judul*).
            - Baris Metadata: 🔴 [Prioritas] | [Status Emoticon] [Status Teks]
-           - Baris Waktu: 📅 [Tanggal] ⏰ [Jam]
+           - Baris Waktu: 📅 [Tanggal] ⏰ [Jam Mulai] - [Jam Selesai]
            - Baris Lokasi (Jika ada): 📍 [Lokasi]
 
         ATURAN LOGIKA STATUS & EMOTIKON (PENTING):
@@ -155,13 +164,14 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
     - Untuk membuat jadwal, user WAJIB minimal menyebutkan: JUDUL (Title) dan WAKTU (Tanggal/Jam).
     - Jika "is_data_complete" false, isi "reply" dengan pertanyaan meminta data yang kurang.
     - Jika "is_data_complete" true, isi "data" dengan:
-      > tasks: title, date (DD/MM/YYYY), time (HH:mm), priority (Tinggi/Sedang/Rendah), location, description.
-      > events: title, category (Rapat/Seminar/Lainnya), date (DD/MM/YYYY), time (HH:mm), priority, location, description.
+      > tasks: title, date (DD/MM/YYYY), time (HH:mm), end_time (HH:mm), priority (Tinggi/Sedang/Rendah), location, description.
+      > events: title, category (Rapat/Seminar/Lainnya), date (DD/MM/YYYY), time (HH:mm), end_time (HH:mm), priority, location, description.
       > consultations: title, date (DD/MM/YYYY), start_time, end_time, location, description, status ("SCHEDULED").
       > teaching_schedules: course_name, day_of_week, start_time, end_time, classroom.
 
     ATURAN PENGISIAN FIELD KOSONG (WAJIB):
     Jika user tidak menyebutkan lokasi atau deskripsi, KAMU WAJIB MENGISINYA DENGAN STRING KOSONG "".
+    Jika user tidak menyebutkan waktu selesai (end_time), KAMU WAJIB MENGISINYA dengan estimasi 1 jam setelah jam mulai (time).
     JANGAN PERNAH menggunakan null, dan JANGAN PERNAH menghilangkan atribut tersebut dari JSON!
     `;
 
@@ -171,33 +181,33 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
     try {
         const aiData = JSON.parse(cleanJson);
 
-        // JIKA DATA LENGKAP -> SIMPAN KE DB
         if (aiData.is_data_complete === true && aiData.collection !== 'none') {
 
             // --- 🛡️ SABUK PENGAMAN (SANITIZER) ---
-            // 1. Ubah semua nilai null / undefined dari Gemini menjadi string kosong ""
             const sanitizedData = {};
             for (const key in aiData.data) {
                 sanitizedData[key] = (aiData.data[key] === null || aiData.data[key] === undefined) ? "" : aiData.data[key];
             }
 
-            // 2. Paksa field 'description' dan 'location' ADA, meskipun Gemini lupa membuatnya (kasus 9 data)
             if (!('description' in sanitizedData)) sanitizedData.description = "";
             if (!('location' in sanitizedData)) sanitizedData.location = "";
 
-            // Gabungkan dengan default value Lecturo
+            // PERBAIKAN: Sabuk pengaman ganda jika AI lupa memberi end_time
+            if (!('end_time' in sanitizedData) || sanitizedData.end_time === "") {
+                sanitizedData.end_time = addOneHour(sanitizedData.time || "");
+            }
+
             const finalData = {
                 ...sanitizedData,
                 input_source: 'WA_BOT',
                 updated_at: new Date().toISOString(),
                 is_completed: false,
-                notification_minutes: 15 // Default pengingat 15 menit
+                notification_minutes: 15
             };
 
             await userRef.collection(aiData.collection).add(finalData);
             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
         }
-        // JIKA DATA KURANG -> TANYA BALIK (TIDAK DISIMPAN KE DB)
         else {
             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
         }
@@ -209,7 +219,7 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
 };
 
 // ============================================================================
-// 4. FUNGSI DELETE (MENGHAPUS JADWAL)
+// 4. FUNGSI DELETE
 // ============================================================================
 const processDeleteSchedule = async (res, userRef, message, contextData) => {
     const prompt = `
@@ -254,7 +264,6 @@ const chatWithGemini = async (req, res) => {
         if (!message || !uid) return res.status(400).json({ error: 'Data tidak lengkap' });
 
         const finalName = userName || "Dosen";
-        // GANTI DENGAN KODE SABUK PENGAMAN ZONA WAKTU INI:
         const formatter = new Intl.DateTimeFormat('id-ID', {
             timeZone: 'Asia/Makassar',
             day: '2-digit',
@@ -265,13 +274,11 @@ const chatWithGemini = async (req, res) => {
             hour12: false
         });
 
-        // Hasilnya otomatis akurat (Sesuai waktu asli Makassar)
         let formattedNow = formatter.format(new Date());
-        formattedNow = formattedNow.replace(/\./g, ':'); // Jaga-jaga jika format id-ID memakai titik untuk jam
+        formattedNow = formattedNow.replace(/\./g, ':');
 
         const userRef = db.collection('users').doc(uid);
 
-        // Ambil data untuk referensi
         const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
             userRef.collection('teaching_schedules').get(),
             userRef.collection('events').get(),
@@ -286,7 +293,6 @@ const chatWithGemini = async (req, res) => {
         D. KONSULTASI:\n${formatConsultations(consultationSnap)}
         `;
 
-        // --- STEP 1: INTENT ROUTING (Identifikasi Niat User) ---
         const intentPrompt = `Pesan user: "${message}". Apakah tujuan user? 
         Jawab HANYA DENGAN SATU KATA: "CREATE" (jika ingin menambah jadwal), "DELETE" (jika ingin menghapus/membatalkan jadwal), atau "READ" (jika bertanya, menyapa, atau melihat jadwal).`;
 
@@ -295,7 +301,6 @@ const chatWithGemini = async (req, res) => {
 
         console.log(`🤖 Intent Deteksi: ${intentText}`);
 
-        // --- STEP 2: ARAHKAN KE FUNGSI YANG TEPAT ---
         if (intentText.includes('CREATE')) {
             return await processCreateSchedule(res, userRef, message, formattedNow);
         }
@@ -329,6 +334,7 @@ const extractEvent = async (req, res) => {
         - "category": "Rapat, Seminar, Webinar, Workshop, Penelitian, atau Lainnya".
         - "date": format "dd/MM/yyyy".
         - "time": format "HH:mm".
+        - "end_time": format "HH:mm" (Estimasi 1 jam jika tidak ada).
         - "location": Lokasi.
         - "description": Ringkasan.
 
