@@ -12,7 +12,6 @@
     <!-- NAVBAR -->
     <nav class="navbar">
         <div class="logo">Lecturo</div>
-        <!-- Tombol untuk beralih ke Portal Dosen -->
         <button id="btnSwitchToLecturer" class="btn-nav" onclick="showLecturerPortal()">👨‍🏫 Portal Dosen</button>
         <button id="btnSwitchToStudent" class="btn-nav" onclick="showStudentPortal()" style="display: none;">🎓 Portal
             Mahasiswa</button>
@@ -21,7 +20,7 @@
     <div class="main-container">
 
         <!-- ========================================== -->
-        <!-- 🎓 PORTAL MAHASISWA (DEFAULT VIEW)         -->
+        <!-- 🎓 PORTAL MAHASISWA                        -->
         <!-- ========================================== -->
         <div id="student-portal">
             <div class="hero-section">
@@ -29,15 +28,11 @@
                 <p>Temukan jadwal kosong dan sesi bimbingan dosen dengan mudah.</p>
 
                 <div class="search-box">
-                    <input type="text" id="searchDosen" placeholder="Ketik nama dosen (Coba ketik 'Firman')..."
-                        autocomplete="off">
-                    <div id="searchResults" class="search-results">
-                        <!-- Hasil pencarian akan muncul di sini via JS -->
-                    </div>
+                    <input type="text" id="searchDosen" placeholder="Ketik nama dosen..." autocomplete="off">
+                    <div id="searchResults" class="search-results"></div>
                 </div>
             </div>
 
-            <!-- Tampilan Jadwal Dosen (Muncul setelah dosen dipilih) -->
             <div id="schedule-display" class="schedule-card" style="display: none;">
                 <div class="schedule-header">
                     <div>
@@ -56,14 +51,13 @@
                 </div>
 
                 <div class="timeline-container" id="timelineContainer">
-                    <!-- Blok waktu (08:00 - 18:00) digenerate via JS -->
+                    <!-- Blok waktu muncul disini -->
                 </div>
             </div>
         </div>
 
-
         <!-- ========================================== -->
-        <!-- 👨‍🏫 PORTAL DOSEN (LOGIN & UPLOAD CSV)       -->
+        <!-- 👨‍🏫 PORTAL DOSEN (PERSIS SEPERTI ASLI)       -->
         <!-- ========================================== -->
         <div id="lecturer-portal" style="display: none;">
             <div class="card" id="mainCard">
@@ -81,7 +75,8 @@
                     <div class="divider">Belum Punya Akun?</div>
                     <div class="cta-box">
                         <p>Buat akun terlebih dahulu melalui aplikasi mobile Android kami.</p>
-                        <a href="#" target="_blank" style="text-decoration: none;">
+                        <a href="https://drive.google.com/drive/folders/1iLsHM_eRriOgOAVLTHGUqbd3LNGTuIhw?usp=sharing"
+                            target="_blank" style="text-decoration: none;">
                             <button type="button" class="btn-outline">
                                 📥 Download Aplikasi
                             </button>
@@ -90,7 +85,7 @@
                 </form>
 
                 <!-- SECTION OTP -->
-                <form id="section-otp">
+                <form id="section-otp" style="display: none;">
                     <div class="form-group">
                         <label for="otp">Kode OTP</label>
                         <input type="number" id="otp" placeholder="Masukkan 4 digit kode" required>
@@ -99,8 +94,8 @@
                     <button type="button" class="btn-secondary" onclick="resetToLogin()">Kembali</button>
                 </form>
 
-                <!-- SECTION UPLOAD -->
-                <div id="section-upload">
+                <!-- SECTION UPLOAD (Dengan Panduan Lengkap) -->
+                <div id="section-upload" style="display: none;">
                     <button type="button" class="btn-success" onclick="downloadTemplate()">📥 Download Template
                         CSV</button>
 
@@ -113,25 +108,68 @@
                         <button type="button" class="btn-secondary" onclick="logout()">Logout</button>
                     </form>
 
-                    <!-- PANDUAN (Dipendekkan di kode ini agar rapi, kamu bisa copas panduan tabel lamamu ke sini) -->
                     <div class="guide-container">
                         <div class="guide-title">📖 Panduan Pengisian Kolom CSV</div>
-                        <p style="text-align: center; font-size: 12px; color: #7f8c8d;">Pastikan format CSV sesuai
-                            dengan template standar.</p>
+                        <div style="margin-bottom: 10px; text-align: center;">
+                            <span class="badge badge-red">Wajib Diisi</span>
+                            <span class="badge badge-green">Opsional (Boleh Kosong)</span>
+                        </div>
+                        <table class="guide-table">
+                            <thead>
+                                <tr>
+                                    <th>Tipe Jadwal</th>
+                                    <th>Kolom Wajib (Merah)</th>
+                                    <th>Kolom Opsional (Hijau)</th>
+                                    <th>Diabaikan (Kosongkan)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>SEMUA TIPE</strong></td>
+                                    <td class="bg-red">tipe_jadwal, judul, tanggal, waktu_mulai</td>
+                                    <td class="bg-green">-</td>
+                                    <td class="bg-grey">-</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>tugas</strong></td>
+                                    <td class="bg-red">-</td>
+                                    <td class="bg-green">lokasi, deskripsi, prioritas, pengingat</td>
+                                    <td class="bg-grey">waktu_selesai, kategori_event, kode_kelas, hari, jml_mhs</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>mengajar</strong></td>
+                                    <td class="bg-red">-</td>
+                                    <td class="bg-green">waktu_selesai, lokasi, kode_kelas, hari, jml_mhs, prioritas,
+                                        pengingat</td>
+                                    <td class="bg-grey">deskripsi, kategori_event</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>event</strong></td>
+                                    <td class="bg-red">-</td>
+                                    <td class="bg-green">kategori_event, lokasi, deskripsi, prioritas, pengingat</td>
+                                    <td class="bg-grey">waktu_selesai, kode_kelas, hari, jml_mhs</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>konsultasi</strong></td>
+                                    <td class="bg-red">-</td>
+                                    <td class="bg-green">waktu_selesai, lokasi, deskripsi, prioritas, pengingat</td>
+                                    <td class="bg-grey">kategori_event, kode_kelas, hari, jml_mhs</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
                 <div id="alert"></div>
             </div>
         </div>
-
     </div>
 
-    <!-- MODAL KONFIRMASI -->
+    <!-- MODAL KONFIRMASI (PERSIS SEPERTI ASLI) -->
     <div id="confirmModal" class="modal">
         <div class="modal-content">
             <h3>Konfirmasi Nomor</h3>
-            <p>Pastikan nomor ini aktif di aplikasi Lecturo.</p>
+            <p>Pastikan nomor ini adalah nomor yang telah terdaftar di aplikasi Lecturo.</p>
             <h2 id="confirmPhoneNumber">0812...</h2>
             <div class="modal-actions">
                 <button type="button" class="btn-secondary" onclick="closeModal()">Ubah Nomor</button>

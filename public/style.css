@@ -1,13 +1,21 @@
 /* =========================================
-   1. CSS DASAR & LAYOUT
+   1. CSS LAMA (DASAR TAMPILAN)
    ========================================= */
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #f4f7f6;
     margin: 0;
-    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+    flex-direction: column;
+    /* Ditambahkan agar navbar di atas */
 }
 
+/* NAVBAR UNTUK SPA */
 .navbar {
     background-color: white;
     padding: 15px 30px;
@@ -15,6 +23,12 @@ body {
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    box-sizing: border-box;
 }
 
 .logo {
@@ -41,13 +55,341 @@ body {
 }
 
 .main-container {
-    padding: 40px 20px;
+    margin-top: 80px;
+    /* Jarak untuk navbar */
+    width: 100%;
     display: flex;
     justify-content: center;
 }
 
+/* KARTU DOSEN */
+.card {
+    background-color: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 500px;
+    box-sizing: border-box;
+    transition: max-width 0.5s ease;
+}
+
+.card.expanded {
+    max-width: 850px;
+}
+
+h2 {
+    color: #2c3e50;
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+p.subtitle {
+    color: #7f8c8d;
+    text-align: center;
+    font-size: 14px;
+    margin-bottom: 25px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    color: #34495e;
+    font-weight: 600;
+}
+
+input[type="text"],
+input[type="file"],
+input[type="number"],
+input[type="date"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #bdc3c7;
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    background-color: #2980b9;
+}
+
+button:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background-color: #95a5a6;
+    margin-top: 10px;
+}
+
+.btn-secondary:hover {
+    background-color: #7f8c8d;
+}
+
+.btn-success {
+    background-color: #2ecc71;
+    margin-bottom: 20px;
+}
+
+.btn-success:hover {
+    background-color: #27ae60;
+}
+
+#alert {
+    margin-top: 20px;
+    padding: 15px;
+    border-radius: 6px;
+    display: none;
+    font-size: 14px;
+}
+
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.alert-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* 🔴 INI KODE YANG SEMPAT HILANG (Penyebab form bertumpuk) */
+#section-otp,
+#section-upload {
+    display: none;
+}
+
+/* Style untuk Tabel Panduan */
+.guide-container {
+    margin-top: 30px;
+    border-top: 2px dashed #ecf0f1;
+    padding-top: 20px;
+}
+
+.guide-title {
+    font-size: 16px;
+    color: #2c3e50;
+    margin-bottom: 15px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.guide-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    text-align: center;
+}
+
+.guide-table th,
+.guide-table td {
+    border: 1px solid #bdc3c7;
+    padding: 8px;
+}
+
+.guide-table th {
+    background-color: #34495e;
+    color: white;
+}
+
+.bg-red {
+    background-color: #fadbd8;
+    font-weight: bold;
+    color: #c0392b;
+}
+
+.bg-green {
+    background-color: #d5f5e3;
+    color: #27ae60;
+}
+
+.bg-grey {
+    background-color: #f2f3f4;
+    color: #95a5a6;
+    font-style: italic;
+}
+
+.badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-right: 5px;
+    color: white;
+}
+
+.badge-red {
+    background-color: #e74c3c;
+}
+
+.badge-green {
+    background-color: #2ecc71;
+}
+
 /* =========================================
-   2. PORTAL MAHASISWA (PENCARIAN & TIMELINE)
+   2. CSS LAMA (DIVIDER & CTA BOX DOWNLOAD)
+   ========================================= */
+
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 25px 0 15px 0;
+    color: #95a5a6;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.divider:not(:empty)::before {
+    margin-right: .5em;
+}
+
+.divider:not(:empty)::after {
+    margin-left: .5em;
+}
+
+.cta-box {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+}
+
+.cta-box p {
+    font-size: 12px;
+    color: #7f8c8d;
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+.btn-outline {
+    background-color: transparent;
+    color: #2c3e50;
+    border: 2px solid #2c3e50;
+    width: 100%;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-outline:hover {
+    background-color: #2c3e50;
+    color: white;
+}
+
+/* =========================================
+   3. CSS MODAL KONFIRMASI (POPUP)
+   ========================================= */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.modal-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: 12px;
+    text-align: center;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    animation: slideUp 0.3s ease;
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    color: #2c3e50;
+}
+
+.modal-content p {
+    color: #7f8c8d;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+#confirmPhoneNumber {
+    margin: 20px 0;
+    color: #3498db;
+    letter-spacing: 1px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 25px;
+}
+
+.modal-actions button {
+    margin: 0;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+/* =========================================
+   4. CSS PORTAL MAHASISWA (TIMELINE)
    ========================================= */
 #student-portal {
     width: 100%;
@@ -150,6 +492,7 @@ body {
     padding: 10px;
     border-radius: 8px;
     border: 1px solid #bdc3c7;
+    width: auto;
 }
 
 .legend-box {
@@ -167,7 +510,6 @@ body {
     background-color: #95a5a6;
 }
 
-/* Timeline UI */
 .timeline-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -206,199 +548,4 @@ body {
 .slot-busy {
     background-color: #95a5a6;
     border: 2px solid #7f8c8d;
-}
-
-/* =========================================
-   3. PORTAL DOSEN (KODE LAMA DIPERTAHANKAN)
-   ========================================= */
-.card {
-    background-color: white;
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 500px;
-    box-sizing: border-box;
-    transition: max-width 0.5s ease;
-}
-
-.card.expanded {
-    max-width: 850px;
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-label {
-    display: block;
-    margin-bottom: 8px;
-    color: #34495e;
-    font-weight: 600;
-}
-
-input[type="text"],
-input[type="file"],
-input[type="number"] {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #bdc3c7;
-    border-radius: 6px;
-    box-sizing: border-box;
-}
-
-button {
-    width: 100%;
-    padding: 12px;
-    background-color: #3498db;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: 0.3s;
-}
-
-button:hover {
-    background-color: #2980b9;
-}
-
-button:disabled {
-    background-color: #95a5a6;
-    cursor: not-allowed;
-}
-
-.btn-secondary {
-    background-color: #95a5a6;
-    margin-top: 10px;
-}
-
-.btn-success {
-    background-color: #2ecc71;
-    margin-bottom: 20px;
-}
-
-#alert {
-    margin-top: 20px;
-    padding: 15px;
-    border-radius: 6px;
-    display: none;
-    font-size: 14px;
-}
-
-.alert-success {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
-}
-
-.alert-error {
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
-}
-
-.divider {
-    display: flex;
-    align-items: center;
-    text-align: center;
-    margin: 25px 0 15px 0;
-    color: #95a5a6;
-    font-size: 12px;
-    font-weight: bold;
-    text-transform: uppercase;
-}
-
-.divider::before,
-.divider::after {
-    content: '';
-    flex: 1;
-    border-bottom: 1px solid #ecf0f1;
-}
-
-.divider:not(:empty)::before {
-    margin-right: .5em;
-}
-
-.divider:not(:empty)::after {
-    margin-left: .5em;
-}
-
-.cta-box {
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    padding: 15px;
-    text-align: center;
-}
-
-.cta-box p {
-    font-size: 12px;
-    color: #7f8c8d;
-    margin-top: 0;
-    margin-bottom: 12px;
-}
-
-.btn-outline {
-    background-color: transparent;
-    color: #2c3e50;
-    border: 2px solid #2c3e50;
-    width: 100%;
-    padding: 12px;
-    border-radius: 6px;
-    font-size: 15px;
-    font-weight: bold;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.badge {
-    display: inline-block;
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    margin-right: 5px;
-    color: white;
-}
-
-.badge-green {
-    background-color: #2ecc71;
-}
-
-/* Modal Styles */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    align-items: center;
-    justify-content: center;
-}
-
-.modal-content {
-    background-color: white;
-    padding: 30px;
-    border-radius: 12px;
-    text-align: center;
-    width: 90%;
-    max-width: 400px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-}
-
-.modal-actions {
-    display: flex;
-    gap: 15px;
-    margin-top: 25px;
-}
-
-.modal-actions button {
-    margin: 0;
 }

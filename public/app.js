@@ -1,6 +1,5 @@
 let currentUserPhone = "";
 let currentUserUid = "";
-
 const alertBox = document.getElementById('alert');
 const mainCard = document.getElementById('mainCard');
 
@@ -22,92 +21,105 @@ function showStudentPortal() {
 }
 
 // ==========================================
-// 2. LOGIKA PORTAL MAHASISWA (CARI JADWAL)
+// 2. LOGIKA PORTAL MAHASISWA (REAL FETCH API)
 // ==========================================
-
-// --- MOCK DATA (Ganti dengan API Firestore nanti) ---
-const mockDosenData = [
-    { id: "d01", name: "Dr. Firman Ardiansyah, S.T., M.Kom.", univ: "Universitas Negeri Makassar" },
-    { id: "d02", name: "Prof. Budi Santoso", univ: "Universitas Hasanuddin" },
-    { id: "d03", name: "Siti Aminah, M.T.", univ: "Universitas Telkom" }
-];
-
-// Data Jadwal Dummy (Format 1 jam-an untuk kemudahan visualisasi)
-const mockScheduleData = {
-    "d01": {
-        "08:00": "busy", "09:00": "busy", "10:00": "free", "11:00": "consult",
-        "12:00": "busy", "13:00": "free", "14:00": "free", "15:00": "busy",
-        "16:00": "consult", "17:00": "free"
-    }
-};
-
 const searchInput = document.getElementById('searchDosen');
 const searchResults = document.getElementById('searchResults');
 const scheduleDisplay = document.getElementById('schedule-display');
 const timelineContainer = document.getElementById('timelineContainer');
 const datePicker = document.getElementById('scheduleDate');
+let currentDosenId = null;
 
-if (datePicker) datePicker.valueAsDate = new Date();
+if (datePicker) {
+    datePicker.valueAsDate = new Date();
+    datePicker.addEventListener('change', () => {
+        if (currentDosenId) renderTimeline(currentDosenId, datePicker.value);
+    });
+}
 
 if (searchInput) {
-    searchInput.addEventListener('input', function () {
+    searchInput.addEventListener('input', async function () {
         const keyword = this.value.toLowerCase();
         searchResults.innerHTML = '';
 
-        if (keyword.length < 2) return;
+        if (keyword.length < 3) return; // Mencegah spam request, mulai cari setelah 3 huruf
 
-        const filtered = mockDosenData.filter(d => d.name.toLowerCase().includes(keyword));
+        try {
+            // PERHATIAN: Kamu harus membuat endpoint GET /api/dosen/search?q=keyword di Node.js kamu
+            const response = await fetch(`/api/dosen/search?q=${keyword}`);
+            const result = await response.json();
 
-        filtered.forEach(dosen => {
-            const div = document.createElement('div');
-            div.className = 'search-item';
-            div.innerHTML = `<strong>${dosen.name}</strong><span>${dosen.univ}</span>`;
-            div.onclick = () => selectDosen(dosen);
-            searchResults.appendChild(div);
-        });
+            if (response.ok && result.data && result.data.length > 0) {
+                result.data.forEach(dosen => {
+                    const div = document.createElement('div');
+                    div.className = 'search-item';
+                    div.innerHTML = `<strong>${dosen.name}</strong><span>${dosen.univ || 'Dosen Lecturo'}</span>`;
+                    div.onclick = () => selectDosen(dosen);
+                    searchResults.appendChild(div);
+                });
+            } else {
+                searchResults.innerHTML = '<div class="search-item"><span>Tidak ditemukan</span></div>';
+            }
+        } catch (error) {
+            console.error("Gagal mencari data dosen", error);
+            searchResults.innerHTML = '<div class="search-item"><span style="color:red;">Error server. Belum ada API.</span></div>';
+        }
     });
 }
 
 function selectDosen(dosen) {
     searchInput.value = dosen.name;
     searchResults.innerHTML = '';
+    currentDosenId = dosen.uid; // Gunakan UID dari firestore
 
     document.getElementById('displayDosenName').innerText = dosen.name;
-    document.getElementById('displayDosenUniv').innerText = dosen.univ;
+    document.getElementById('displayDosenUniv').innerText = dosen.univ || 'Dosen Lecturo';
     scheduleDisplay.style.display = 'block';
 
-    renderTimeline(dosen.id);
+    renderTimeline(currentDosenId, datePicker.value);
 }
 
-function renderTimeline(dosenId) {
-    timelineContainer.innerHTML = '';
-    const schedule = mockScheduleData[dosenId] || {};
+async function renderTimeline(dosenId, dateStr) {
+    timelineContainer.innerHTML = '<div style="text-align:center; width:100%;">Loading data dari Firestore...</div>';
 
-    for (let i = 8; i <= 17; i++) {
-        const timeKey = `${i < 10 ? '0' + i : i}:00`;
-        const endKey = `${i + 1 < 10 ? '0' + (i + 1) : (i + 1)}:00`;
+    try {
+        // PERHATIAN: Kamu harus membuat endpoint GET /api/jadwal/timeline?uid=x&date=y di Node.js kamu
+        // Format kembalian yang diharapkan dari backend: { "08:00": "busy", "09:00": "consult", "10:00": "free" ... }
+        const response = await fetch(`/api/jadwal/timeline?uid=${dosenId}&date=${dateStr}`);
+        const result = await response.json();
 
-        const status = schedule[timeKey] || 'free';
+        const schedule = response.ok && result.data ? result.data : {};
+        timelineContainer.innerHTML = ''; // Bersihkan loading
 
-        let statusText, cssClass;
-        if (status === 'free') {
-            statusText = "Waktu Luang"; cssClass = "slot-free";
-        } else if (status === 'consult') {
-            statusText = "Bimbingan"; cssClass = "slot-consult";
-        } else {
-            statusText = "Sibuk"; cssClass = "slot-busy";
+        for (let i = 8; i <= 17; i++) {
+            const timeKey = `${i < 10 ? '0' + i : i}:00`;
+            const endKey = `${i + 1 < 10 ? '0' + (i + 1) : (i + 1)}:00`;
+
+            const status = schedule[timeKey] || 'free';
+
+            let statusText, cssClass;
+            if (status === 'free') {
+                statusText = "Waktu Luang"; cssClass = "slot-free";
+            } else if (status === 'consult') {
+                statusText = "Bimbingan"; cssClass = "slot-consult";
+            } else {
+                statusText = "Sibuk"; cssClass = "slot-busy";
+            }
+
+            const slotDiv = document.createElement('div');
+            slotDiv.className = `time-slot ${cssClass}`;
+            slotDiv.innerHTML = `<span class="time-label">${timeKey} - ${endKey}</span><span>${statusText}</span>`;
+
+            timelineContainer.appendChild(slotDiv);
         }
-
-        const slotDiv = document.createElement('div');
-        slotDiv.className = `time-slot ${cssClass}`;
-        slotDiv.innerHTML = `<span class="time-label">${timeKey} - ${endKey}</span><span>${statusText}</span>`;
-
-        timelineContainer.appendChild(slotDiv);
+    } catch (error) {
+        console.error("Gagal memuat jadwal", error);
+        timelineContainer.innerHTML = '<div style="text-align:center; color:red; width:100%;">Gagal mengambil data dari server. Pastikan API backend sudah dibuat.</div>';
     }
 }
 
 // ==========================================
-// 3. LOGIKA PORTAL DOSEN (UI & UTILS)
+// 3. LOGIKA PORTAL DOSEN (KODE LAMA PERSIS)
 // ==========================================
 
 function showAlert(msg, isError = false) {
@@ -150,8 +162,8 @@ window.onload = function () {
     const savedUid = localStorage.getItem('lecturo_uid');
     if (savedUid) {
         currentUserUid = savedUid;
-        showLecturerPortal(); // Langsung tampilkan UI Dosen
-        showUploadSection();  // Langsung masuk halaman upload
+        showLecturerPortal();
+        showUploadSection();
     }
 };
 
@@ -173,9 +185,6 @@ function downloadTemplate() {
     document.body.removeChild(link);
 }
 
-// ==========================================
-// 4. LOGIKA MODAL POPUP & API FETCH LAMA
-// ==========================================
 const confirmModal = document.getElementById('confirmModal');
 const confirmPhoneNumber = document.getElementById('confirmPhoneNumber');
 const btnConfirmSend = document.getElementById('btnConfirmSend');
@@ -191,7 +200,6 @@ function closeModal() {
     confirmModal.style.display = 'none';
 }
 
-// CEGAT FORM LOGIN (Tampilkan Popup)
 document.getElementById('section-login').addEventListener('submit', function (e) {
     e.preventDefault();
     const phone = document.getElementById('phone').value;
@@ -199,10 +207,8 @@ document.getElementById('section-login').addEventListener('submit', function (e)
     openModal(phone);
 });
 
-// EKSEKUSI API REQUEST OTP SETELAH DIKONFIRMASI
 btnConfirmSend.addEventListener('click', async function () {
     closeModal();
-
     const btn = document.getElementById('btnRequestOtp');
     btn.disabled = true;
     btn.innerText = "Mengecek Nomor...";
@@ -232,7 +238,6 @@ btnConfirmSend.addEventListener('click', async function () {
     }
 });
 
-// EKSEKUSI API VERIFY OTP
 document.getElementById('section-otp').addEventListener('submit', async function (e) {
     e.preventDefault();
     const otpCode = document.getElementById('otp').value;
@@ -261,7 +266,6 @@ document.getElementById('section-otp').addEventListener('submit', async function
     }
 });
 
-// EKSEKUSI API UPLOAD CSV
 document.getElementById('uploadForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     const btn = document.getElementById('btnUpload');
