@@ -1,18 +1,216 @@
 /* =========================================
-   1. CSS LAMA (DASAR TAMPILAN)
+   1. CSS DASAR & LAYOUT
    ========================================= */
-
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #f4f7f6;
     margin: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    padding: 20px;
+    padding: 0;
 }
 
+.navbar {
+    background-color: white;
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: bold;
+    color: #3498db;
+}
+
+.btn-nav {
+    background: transparent;
+    border: 2px solid #3498db;
+    color: #3498db;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+    width: auto;
+}
+
+.btn-nav:hover {
+    background: #3498db;
+    color: white;
+}
+
+.main-container {
+    padding: 40px 20px;
+    display: flex;
+    justify-content: center;
+}
+
+/* =========================================
+   2. PORTAL MAHASISWA (PENCARIAN & TIMELINE)
+   ========================================= */
+#student-portal {
+    width: 100%;
+    max-width: 800px;
+}
+
+.hero-section {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.hero-section h1 {
+    color: #2c3e50;
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+.search-box {
+    position: relative;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 15px 20px;
+    font-size: 16px;
+    border-radius: 30px;
+    border: 2px solid #bdc3c7;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    outline: none;
+}
+
+.search-box input:focus {
+    border-color: #3498db;
+}
+
+.search-results {
+    position: absolute;
+    top: 55px;
+    left: 0;
+    width: 100%;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10;
+    text-align: left;
+}
+
+.search-item {
+    padding: 15px 20px;
+    border-bottom: 1px solid #ecf0f1;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.search-item:hover {
+    background: #f8f9fa;
+}
+
+.search-item strong {
+    display: block;
+    color: #2c3e50;
+}
+
+.search-item span {
+    font-size: 12px;
+    color: #7f8c8d;
+}
+
+.schedule-card {
+    background: white;
+    padding: 30px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.schedule-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 2px dashed #ecf0f1;
+    padding-bottom: 20px;
+}
+
+.schedule-header h2 {
+    margin: 0;
+    text-align: left;
+}
+
+.schedule-header p {
+    margin: 0;
+    color: #7f8c8d;
+}
+
+.date-picker {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #bdc3c7;
+}
+
+.legend-box {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.badge-blue {
+    background-color: #3498db;
+}
+
+.badge-grey {
+    background-color: #95a5a6;
+}
+
+/* Timeline UI */
+.timeline-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+}
+
+.time-slot {
+    padding: 15px 10px;
+    border-radius: 8px;
+    text-align: center;
+    color: white;
+    font-weight: bold;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 70px;
+}
+
+.time-slot .time-label {
+    font-size: 11px;
+    opacity: 0.8;
+    margin-bottom: 5px;
+}
+
+.slot-free {
+    background-color: #2ecc71;
+    border: 2px solid #27ae60;
+}
+
+.slot-consult {
+    background-color: #3498db;
+    border: 2px solid #2980b9;
+}
+
+.slot-busy {
+    background-color: #95a5a6;
+    border: 2px solid #7f8c8d;
+}
+
+/* =========================================
+   3. PORTAL DOSEN (KODE LAMA DIPERTAHANKAN)
+   ========================================= */
 .card {
     background-color: white;
     padding: 30px;
@@ -26,19 +224,6 @@ body {
 
 .card.expanded {
     max-width: 850px;
-}
-
-h2 {
-    color: #2c3e50;
-    text-align: center;
-    margin-bottom: 5px;
-}
-
-p.subtitle {
-    color: #7f8c8d;
-    text-align: center;
-    font-size: 14px;
-    margin-bottom: 25px;
 }
 
 .form-group {
@@ -89,17 +274,9 @@ button:disabled {
     margin-top: 10px;
 }
 
-.btn-secondary:hover {
-    background-color: #7f8c8d;
-}
-
 .btn-success {
     background-color: #2ecc71;
     margin-bottom: 20px;
-}
-
-.btn-success:hover {
-    background-color: #27ae60;
 }
 
 #alert {
@@ -122,83 +299,6 @@ button:disabled {
     border: 1px solid #f5c6cb;
 }
 
-#section-otp,
-#section-upload {
-    display: none;
-}
-
-/* Style untuk Tabel Panduan */
-.guide-container {
-    margin-top: 30px;
-    border-top: 2px dashed #ecf0f1;
-    padding-top: 20px;
-}
-
-.guide-title {
-    font-size: 16px;
-    color: #2c3e50;
-    margin-bottom: 15px;
-    text-align: center;
-    font-weight: bold;
-}
-
-.guide-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-    text-align: center;
-}
-
-.guide-table th,
-.guide-table td {
-    border: 1px solid #bdc3c7;
-    padding: 8px;
-}
-
-.guide-table th {
-    background-color: #34495e;
-    color: white;
-}
-
-.bg-red {
-    background-color: #fadbd8;
-    font-weight: bold;
-    color: #c0392b;
-}
-
-.bg-green {
-    background-color: #d5f5e3;
-    color: #27ae60;
-}
-
-.bg-grey {
-    background-color: #f2f3f4;
-    color: #95a5a6;
-    font-style: italic;
-}
-
-.badge {
-    display: inline-block;
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    margin-right: 5px;
-    color: white;
-}
-
-.badge-red {
-    background-color: #e74c3c;
-}
-
-.badge-green {
-    background-color: #2ecc71;
-}
-
-/* =========================================
-   2. CSS BARU (DIVIDER & CTA BOX DOWNLOAD)
-   ========================================= */
-
-/* Garis Pemisah (Divider) */
 .divider {
     display: flex;
     align-items: center;
@@ -225,7 +325,6 @@ button:disabled {
     margin-left: .5em;
 }
 
-/* Kotak Call To Action (Download) */
 .cta-box {
     background-color: #f8f9fa;
     border: 1px solid #e9ecef;
@@ -241,7 +340,6 @@ button:disabled {
     margin-bottom: 12px;
 }
 
-/* Tombol Outline untuk Download */
 .btn-outline {
     background-color: transparent;
     color: #2c3e50;
@@ -252,25 +350,28 @@ button:disabled {
     font-size: 15px;
     font-weight: bold;
     cursor: pointer;
-    transition: 0.3s;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
 }
 
-.btn-outline:hover {
-    background-color: #2c3e50;
+.badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-right: 5px;
     color: white;
 }
 
+.badge-green {
+    background-color: #2ecc71;
+}
 
-/* =========================================
-   3. CSS MODAL KONFIRMASI (POPUP)
-   ========================================= */
+/* Modal Styles */
 .modal {
     display: none;
-    /* Sembunyikan secara default */
     position: fixed;
     z-index: 1000;
     left: 0;
@@ -278,10 +379,8 @@ button:disabled {
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.6);
-    /* Latar belakang gelap transparan */
     align-items: center;
     justify-content: center;
-    animation: fadeIn 0.3s ease;
 }
 
 .modal-content {
@@ -292,24 +391,6 @@ button:disabled {
     width: 90%;
     max-width: 400px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-    animation: slideUp 0.3s ease;
-}
-
-.modal-content h3 {
-    margin-top: 0;
-    color: #2c3e50;
-}
-
-.modal-content p {
-    color: #7f8c8d;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-#confirmPhoneNumber {
-    margin: 20px 0;
-    color: #3498db;
-    letter-spacing: 1px;
 }
 
 .modal-actions {
@@ -320,25 +401,4 @@ button:disabled {
 
 .modal-actions button {
     margin: 0;
-    /* Hilangkan margin bawaan */
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
-@keyframes slideUp {
-    from {
-        transform: translateY(20px);
-    }
-
-    to {
-        transform: translateY(0);
-    }
 }

@@ -1,7 +1,114 @@
 let currentUserPhone = "";
 let currentUserUid = "";
+
 const alertBox = document.getElementById('alert');
 const mainCard = document.getElementById('mainCard');
+
+// ==========================================
+// 1. NAVIGASI ANTAR PORTAL (SPA)
+// ==========================================
+function showLecturerPortal() {
+    document.getElementById('student-portal').style.display = 'none';
+    document.getElementById('lecturer-portal').style.display = 'flex';
+    document.getElementById('btnSwitchToLecturer').style.display = 'none';
+    document.getElementById('btnSwitchToStudent').style.display = 'block';
+}
+
+function showStudentPortal() {
+    document.getElementById('student-portal').style.display = 'block';
+    document.getElementById('lecturer-portal').style.display = 'none';
+    document.getElementById('btnSwitchToLecturer').style.display = 'block';
+    document.getElementById('btnSwitchToStudent').style.display = 'none';
+}
+
+// ==========================================
+// 2. LOGIKA PORTAL MAHASISWA (CARI JADWAL)
+// ==========================================
+
+// --- MOCK DATA (Ganti dengan API Firestore nanti) ---
+const mockDosenData = [
+    { id: "d01", name: "Dr. Firman Ardiansyah, S.T., M.Kom.", univ: "Universitas Negeri Makassar" },
+    { id: "d02", name: "Prof. Budi Santoso", univ: "Universitas Hasanuddin" },
+    { id: "d03", name: "Siti Aminah, M.T.", univ: "Universitas Telkom" }
+];
+
+// Data Jadwal Dummy (Format 1 jam-an untuk kemudahan visualisasi)
+const mockScheduleData = {
+    "d01": {
+        "08:00": "busy", "09:00": "busy", "10:00": "free", "11:00": "consult",
+        "12:00": "busy", "13:00": "free", "14:00": "free", "15:00": "busy",
+        "16:00": "consult", "17:00": "free"
+    }
+};
+
+const searchInput = document.getElementById('searchDosen');
+const searchResults = document.getElementById('searchResults');
+const scheduleDisplay = document.getElementById('schedule-display');
+const timelineContainer = document.getElementById('timelineContainer');
+const datePicker = document.getElementById('scheduleDate');
+
+if (datePicker) datePicker.valueAsDate = new Date();
+
+if (searchInput) {
+    searchInput.addEventListener('input', function () {
+        const keyword = this.value.toLowerCase();
+        searchResults.innerHTML = '';
+
+        if (keyword.length < 2) return;
+
+        const filtered = mockDosenData.filter(d => d.name.toLowerCase().includes(keyword));
+
+        filtered.forEach(dosen => {
+            const div = document.createElement('div');
+            div.className = 'search-item';
+            div.innerHTML = `<strong>${dosen.name}</strong><span>${dosen.univ}</span>`;
+            div.onclick = () => selectDosen(dosen);
+            searchResults.appendChild(div);
+        });
+    });
+}
+
+function selectDosen(dosen) {
+    searchInput.value = dosen.name;
+    searchResults.innerHTML = '';
+
+    document.getElementById('displayDosenName').innerText = dosen.name;
+    document.getElementById('displayDosenUniv').innerText = dosen.univ;
+    scheduleDisplay.style.display = 'block';
+
+    renderTimeline(dosen.id);
+}
+
+function renderTimeline(dosenId) {
+    timelineContainer.innerHTML = '';
+    const schedule = mockScheduleData[dosenId] || {};
+
+    for (let i = 8; i <= 17; i++) {
+        const timeKey = `${i < 10 ? '0' + i : i}:00`;
+        const endKey = `${i + 1 < 10 ? '0' + (i + 1) : (i + 1)}:00`;
+
+        const status = schedule[timeKey] || 'free';
+
+        let statusText, cssClass;
+        if (status === 'free') {
+            statusText = "Waktu Luang"; cssClass = "slot-free";
+        } else if (status === 'consult') {
+            statusText = "Bimbingan"; cssClass = "slot-consult";
+        } else {
+            statusText = "Sibuk"; cssClass = "slot-busy";
+        }
+
+        const slotDiv = document.createElement('div');
+        slotDiv.className = `time-slot ${cssClass}`;
+        slotDiv.innerHTML = `<span class="time-label">${timeKey} - ${endKey}</span><span>${statusText}</span>`;
+
+        timelineContainer.appendChild(slotDiv);
+    }
+}
+
+// ==========================================
+// 3. LOGIKA PORTAL DOSEN (UI & UTILS)
+// ==========================================
 
 function showAlert(msg, isError = false) {
     alertBox.style.display = 'block';
@@ -11,7 +118,6 @@ function showAlert(msg, isError = false) {
 
 function hideAlert() { alertBox.style.display = 'none'; }
 
-// FUNGSI BARU: Langsung melompat ke halaman Upload
 function showUploadSection() {
     hideAlert();
     document.getElementById('section-login').style.display = 'none';
@@ -31,9 +137,7 @@ function resetToLogin() {
 }
 
 function logout() {
-    // Hapus data dari brankas browser saat logout
     localStorage.removeItem('lecturo_uid');
-
     currentUserPhone = "";
     currentUserUid = "";
     document.getElementById('phone').value = "";
@@ -42,13 +146,12 @@ function logout() {
     resetToLogin();
 }
 
-// FUNGSI BARU: Cek LocalStorage saat halaman pertama kali dimuat
 window.onload = function () {
     const savedUid = localStorage.getItem('lecturo_uid');
     if (savedUid) {
-        // Jika UID ada di brankas, langsung bypass ke halaman upload
         currentUserUid = savedUid;
-        showUploadSection();
+        showLecturerPortal(); // Langsung tampilkan UI Dosen
+        showUploadSection();  // Langsung masuk halaman upload
     }
 };
 
@@ -71,7 +174,7 @@ function downloadTemplate() {
 }
 
 // ==========================================
-// LOGIKA MODAL POPUP (BARU)
+// 4. LOGIKA MODAL POPUP & API FETCH LAMA
 // ==========================================
 const confirmModal = document.getElementById('confirmModal');
 const confirmPhoneNumber = document.getElementById('confirmPhoneNumber');
@@ -81,24 +184,24 @@ let pendingPhoneNumber = "";
 function openModal(phone) {
     pendingPhoneNumber = phone;
     confirmPhoneNumber.innerText = phone;
-    confirmModal.style.display = 'flex'; // Munculkan popup
+    confirmModal.style.display = 'flex';
 }
 
 function closeModal() {
-    confirmModal.style.display = 'none'; // Sembunyikan popup
+    confirmModal.style.display = 'none';
 }
 
-// 1. CEGAT FORM LOGIN (Tampilkan Popup)
+// CEGAT FORM LOGIN (Tampilkan Popup)
 document.getElementById('section-login').addEventListener('submit', function (e) {
     e.preventDefault();
     const phone = document.getElementById('phone').value;
     hideAlert();
-    openModal(phone); // Buka popup konfirmasi
+    openModal(phone);
 });
 
-// 2. EKSEKUSI API SETELAH DIKONFIRMASI
+// EKSEKUSI API REQUEST OTP SETELAH DIKONFIRMASI
 btnConfirmSend.addEventListener('click', async function () {
-    closeModal(); // Tutup popup
+    closeModal();
 
     const btn = document.getElementById('btnRequestOtp');
     btn.disabled = true;
@@ -119,7 +222,6 @@ btnConfirmSend.addEventListener('click', async function () {
             document.getElementById('section-otp').style.display = 'block';
             document.getElementById('form-subtitle').innerText = "Verifikasi Kode OTP";
         } else {
-            // Tampilkan pesan error dari Backend (misal: "Nomor belum terdaftar")
             showAlert(`<strong>Ditolak:</strong> ${result.message}`, true);
         }
     } catch (error) {
@@ -130,6 +232,7 @@ btnConfirmSend.addEventListener('click', async function () {
     }
 });
 
+// EKSEKUSI API VERIFY OTP
 document.getElementById('section-otp').addEventListener('submit', async function (e) {
     e.preventDefault();
     const otpCode = document.getElementById('otp').value;
@@ -146,10 +249,7 @@ document.getElementById('section-otp').addEventListener('submit', async function
 
         if (response.ok && result.status === 'success') {
             currentUserUid = result.uid;
-
-            // SIMPAN UID KE DALAM BRANKAS BROWSER
             localStorage.setItem('lecturo_uid', result.uid);
-
             showUploadSection();
         } else {
             showAlert(result.message || "Kode OTP Salah.", true);
@@ -161,6 +261,7 @@ document.getElementById('section-otp').addEventListener('submit', async function
     }
 });
 
+// EKSEKUSI API UPLOAD CSV
 document.getElementById('uploadForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     const btn = document.getElementById('btnUpload');

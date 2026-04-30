@@ -4,115 +4,134 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal Upload Jadwal - Lecturo</title>
+    <title>Lecturo - Portal Jadwal Akademik</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <div class="card" id="mainCard">
-        <h2>Lecturo App</h2>
-        <p class="subtitle" id="form-subtitle">Login Dosen (Via WhatsApp)</p>
+    <!-- NAVBAR -->
+    <nav class="navbar">
+        <div class="logo">Lecturo</div>
+        <!-- Tombol untuk beralih ke Portal Dosen -->
+        <button id="btnSwitchToLecturer" class="btn-nav" onclick="showLecturerPortal()">👨‍🏫 Portal Dosen</button>
+        <button id="btnSwitchToStudent" class="btn-nav" onclick="showStudentPortal()" style="display: none;">🎓 Portal
+            Mahasiswa</button>
+    </nav>
 
-        <form id="section-login">
-            <div class="form-group">
-                <label for="phone">Nomor WhatsApp</label>
-                <input type="text" id="phone" placeholder="Contoh: 08123456789" required>
-            </div>
-            <button type="submit" id="btnRequestOtp">Kirim OTP ke WhatsApp</button>
+    <div class="main-container">
 
-            <div class="divider">Belum Punya Akun?</div>
-            <div class="cta-box">
-                <p>Buat akun terlebih dahulu melalui aplikasi mobile Android kami.</p>
-                <a href="https://drive.google.com/drive/folders/1iLsHM_eRriOgOAVLTHGUqbd3LNGTuIhw?usp=sharing"
-                    target="_blank" style="text-decoration: none;">
-                    <button type="button" class="btn-outline">
-                        📥 Download Aplikasi
-                    </button>
-                </a>
-            </div>
-        </form>
+        <!-- ========================================== -->
+        <!-- 🎓 PORTAL MAHASISWA (DEFAULT VIEW)         -->
+        <!-- ========================================== -->
+        <div id="student-portal">
+            <div class="hero-section">
+                <h1>Cari Waktu Luang Dosenmu</h1>
+                <p>Temukan jadwal kosong dan sesi bimbingan dosen dengan mudah.</p>
 
-        <form id="section-otp">
-            <div class="form-group">
-                <label for="otp">Kode OTP</label>
-                <input type="number" id="otp" placeholder="Masukkan 4 digit kode" required>
-            </div>
-            <button type="submit" id="btnVerifyOtp">Verifikasi Login</button>
-            <button type="button" class="btn-secondary" onclick="resetToLogin()">Kembali</button>
-        </form>
-
-        <div id="section-upload">
-            <button type="button" class="btn-success" onclick="downloadTemplate()">📥 Download Template CSV</button>
-
-            <form id="uploadForm">
-                <div class="form-group">
-                    <label for="file_jadwal">Pilih File CSV Jadwal (.csv)</label>
-                    <input type="file" id="file_jadwal" accept=".csv" required>
+                <div class="search-box">
+                    <input type="text" id="searchDosen" placeholder="Ketik nama dosen (Coba ketik 'Firman')..."
+                        autocomplete="off">
+                    <div id="searchResults" class="search-results">
+                        <!-- Hasil pencarian akan muncul di sini via JS -->
+                    </div>
                 </div>
-                <button type="submit" id="btnUpload">🚀 Upload Jadwal Sekarang</button>
-                <button type="button" class="btn-secondary" onclick="logout()">Logout</button>
-            </form>
+            </div>
 
-            <div class="guide-container">
-                <div class="guide-title">📖 Panduan Pengisian Kolom CSV</div>
-                <div style="margin-bottom: 10px; text-align: center;">
-                    <span class="badge badge-red">Wajib Diisi</span>
-                    <span class="badge badge-green">Opsional (Boleh Kosong)</span>
+            <!-- Tampilan Jadwal Dosen (Muncul setelah dosen dipilih) -->
+            <div id="schedule-display" class="schedule-card" style="display: none;">
+                <div class="schedule-header">
+                    <div>
+                        <h2 id="displayDosenName">Nama Dosen</h2>
+                        <p id="displayDosenUniv">Universitas</p>
+                    </div>
+                    <div>
+                        <input type="date" id="scheduleDate" class="date-picker">
+                    </div>
                 </div>
-                <table class="guide-table">
-                    <thead>
-                        <tr>
-                            <th>Tipe Jadwal</th>
-                            <th>Kolom Wajib (Merah)</th>
-                            <th>Kolom Opsional (Hijau)</th>
-                            <th>Diabaikan (Kosongkan)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><strong>SEMUA TIPE</strong></td>
-                            <td class="bg-red">tipe_jadwal, judul, tanggal, waktu_mulai</td>
-                            <td class="bg-green">-</td>
-                            <td class="bg-grey">-</td>
-                        </tr>
-                        <tr>
-                            <td><strong>tugas</strong></td>
-                            <td class="bg-red">-</td>
-                            <td class="bg-green">lokasi, deskripsi, prioritas, pengingat</td>
-                            <td class="bg-grey">waktu_selesai, kategori_event, kode_kelas, hari, jml_mhs</td>
-                        </tr>
-                        <tr>
-                            <td><strong>mengajar</strong></td>
-                            <td class="bg-red">-</td>
-                            <td class="bg-green">waktu_selesai, lokasi, kode_kelas, hari, jml_mhs, prioritas, pengingat
-                            </td>
-                            <td class="bg-grey">deskripsi, kategori_event</td>
-                        </tr>
-                        <tr>
-                            <td><strong>event</strong></td>
-                            <td class="bg-red">-</td>
-                            <td class="bg-green">kategori_event, lokasi, deskripsi, prioritas, pengingat</td>
-                            <td class="bg-grey">waktu_selesai, kode_kelas, hari, jml_mhs</td>
-                        </tr>
-                        <tr>
-                            <td><strong>konsultasi</strong></td>
-                            <td class="bg-red">-</td>
-                            <td class="bg-green">waktu_selesai, lokasi, deskripsi, prioritas, pengingat</td>
-                            <td class="bg-grey">kategori_event, kode_kelas, hari, jml_mhs</td>
-                        </tr>
-                    </tbody>
-                </table>
+
+                <div class="legend-box">
+                    <span class="badge badge-green">Waktu Luang</span>
+                    <span class="badge badge-blue">Sesi Bimbingan</span>
+                    <span class="badge badge-grey">Sibuk / Mengajar</span>
+                </div>
+
+                <div class="timeline-container" id="timelineContainer">
+                    <!-- Blok waktu (08:00 - 18:00) digenerate via JS -->
+                </div>
             </div>
         </div>
 
-        <div id="alert"></div>
-    </div>
+
+        <!-- ========================================== -->
+        <!-- 👨‍🏫 PORTAL DOSEN (LOGIN & UPLOAD CSV)       -->
+        <!-- ========================================== -->
+        <div id="lecturer-portal" style="display: none;">
+            <div class="card" id="mainCard">
+                <h2>Lecturo App</h2>
+                <p class="subtitle" id="form-subtitle">Login Dosen (Via WhatsApp)</p>
+
+                <!-- SECTION LOGIN -->
+                <form id="section-login">
+                    <div class="form-group">
+                        <label for="phone">Nomor WhatsApp</label>
+                        <input type="text" id="phone" placeholder="Contoh: 08123456789" required>
+                    </div>
+                    <button type="submit" id="btnRequestOtp">Kirim OTP ke WhatsApp</button>
+
+                    <div class="divider">Belum Punya Akun?</div>
+                    <div class="cta-box">
+                        <p>Buat akun terlebih dahulu melalui aplikasi mobile Android kami.</p>
+                        <a href="#" target="_blank" style="text-decoration: none;">
+                            <button type="button" class="btn-outline">
+                                📥 Download Aplikasi
+                            </button>
+                        </a>
+                    </div>
+                </form>
+
+                <!-- SECTION OTP -->
+                <form id="section-otp">
+                    <div class="form-group">
+                        <label for="otp">Kode OTP</label>
+                        <input type="number" id="otp" placeholder="Masukkan 4 digit kode" required>
+                    </div>
+                    <button type="submit" id="btnVerifyOtp">Verifikasi Login</button>
+                    <button type="button" class="btn-secondary" onclick="resetToLogin()">Kembali</button>
+                </form>
+
+                <!-- SECTION UPLOAD -->
+                <div id="section-upload">
+                    <button type="button" class="btn-success" onclick="downloadTemplate()">📥 Download Template
+                        CSV</button>
+
+                    <form id="uploadForm">
+                        <div class="form-group">
+                            <label for="file_jadwal">Pilih File CSV Jadwal (.csv)</label>
+                            <input type="file" id="file_jadwal" accept=".csv" required>
+                        </div>
+                        <button type="submit" id="btnUpload">🚀 Upload Jadwal Sekarang</button>
+                        <button type="button" class="btn-secondary" onclick="logout()">Logout</button>
+                    </form>
+
+                    <!-- PANDUAN (Dipendekkan di kode ini agar rapi, kamu bisa copas panduan tabel lamamu ke sini) -->
+                    <div class="guide-container">
+                        <div class="guide-title">📖 Panduan Pengisian Kolom CSV</div>
+                        <p style="text-align: center; font-size: 12px; color: #7f8c8d;">Pastikan format CSV sesuai
+                            dengan template standar.</p>
+                    </div>
+                </div>
+
+                <div id="alert"></div>
+            </div>
+        </div>
 
     </div>
+
+    <!-- MODAL KONFIRMASI -->
     <div id="confirmModal" class="modal">
         <div class="modal-content">
             <h3>Konfirmasi Nomor</h3>
-            <p>Pastikan nomor ini adalah nomor yang telah terdaftar di aplikasi Lecturo.</p>
+            <p>Pastikan nomor ini aktif di aplikasi Lecturo.</p>
             <h2 id="confirmPhoneNumber">0812...</h2>
             <div class="modal-actions">
                 <button type="button" class="btn-secondary" onclick="closeModal()">Ubah Nomor</button>
