@@ -46,7 +46,7 @@ if (searchInput) {
 
         try {
             // PERHATIAN: Kamu harus membuat endpoint GET /api/dosen/search?q=keyword di Node.js kamu
-            const response = await fetch(`/api/dosen/search?q=${keyword}`);
+            const response = await fetch(`/api/portal/search-dosen?q=${keyword}`);
             const result = await response.json();
 
             if (response.ok && result.data && result.data.length > 0) {
@@ -85,7 +85,7 @@ async function renderTimeline(dosenId, dateStr) {
     try {
         // PERHATIAN: Kamu harus membuat endpoint GET /api/jadwal/timeline?uid=x&date=y di Node.js kamu
         // Format kembalian yang diharapkan dari backend: { "08:00": "busy", "09:00": "consult", "10:00": "free" ... }
-        const response = await fetch(`/api/jadwal/timeline?uid=${dosenId}&date=${dateStr}`);
+        const response = await fetch(`/api/portal/timeline?uid=${dosenId}&date=${dateStr}`);
         const result = await response.json();
 
         const schedule = response.ok && result.data ? result.data : {};
