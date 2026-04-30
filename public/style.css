@@ -510,10 +510,88 @@ button:disabled {
     background-color: #95a5a6;
 }
 
-.timeline-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 12px;
+/* =========================================
+   GANTT CHART TIMELINE STYLE (AKURAT MENIT)
+   ========================================= */
+.timeline-wrapper {
+    width: 100%;
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Garis penunjuk jam 08:00 - 18:00 di atas bar */
+.timeline-scale {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #7f8c8d;
+    padding: 0 5px;
+    position: relative;
+    margin-bottom: 5px;
+}
+
+/* Container utama bar panjang */
+.timeline-bar-container {
+    display: flex;
+    width: 100%;
+    height: 60px;
+    background-color: #ecf0f1;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.time-block {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    border-right: 1px solid rgba(255, 255, 255, 0.3);
+    transition: filter 0.2s;
+    overflow: hidden;
+    text-align: center;
+    padding: 0 5px;
+    box-sizing: border-box;
+}
+
+.time-block:last-child {
+    border-right: none;
+}
+
+.time-block:hover {
+    filter: brightness(0.9);
+}
+
+.block-title {
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    max-width: 100%;
+}
+
+.block-time {
+    font-size: 10px;
+    opacity: 0.9;
+    font-weight: normal;
+}
+
+.slot-free {
+    background-color: #2ecc71;
+}
+
+.slot-consult {
+    background-color: #3498db;
+}
+
+.slot-busy {
+    background-color: #95a5a6;
 }
 
 .time-slot {

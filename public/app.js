@@ -79,42 +79,75 @@ function selectDosen(dosen) {
     renderTimeline(currentDosenId, datePicker.value);
 }
 
+// Di dalam file app.js (Frontend web portal)
+
 async function renderTimeline(dosenId, dateStr) {
-    timelineContainer.innerHTML = '<div style="text-align:center; width:100%;">Loading data dari Firestore...</div>';
+    timelineContainer.innerHTML = '<div style="text-align:center; width:100%; padding: 20px;">Loading data dari Firestore...</div>';
 
     try {
-        // PERHATIAN: Kamu harus membuat endpoint GET /api/jadwal/timeline?uid=x&date=y di Node.js kamu
-        // Format kembalian yang diharapkan dari backend: { "08:00": "busy", "09:00": "consult", "10:00": "free" ... }
         const response = await fetch(`/api/portal/timeline?uid=${dosenId}&date=${dateStr}`);
         const result = await response.json();
 
-        const schedule = response.ok && result.data ? result.data : {};
+        const scheduleData = response.ok && result.data ? result.data : [];
         timelineContainer.innerHTML = ''; // Bersihkan loading
 
-        for (let i = 8; i <= 17; i++) {
-            const timeKey = `${i < 10 ? '0' + i : i}:00`;
-            const endKey = `${i + 1 < 10 ? '0' + (i + 1) : (i + 1)}:00`;
+        // Buat struktur Gantt Chart
+        const wrapper = document.createElement('div');
+        wrapper.className = 'timeline-wrapper';
 
-            const status = schedule[timeKey] || 'free';
+        // 1. Buat Skala Penunjuk Jam (08:00 - 18:00)
+        const scaleDiv = document.createElement('div');
+        scaleDiv.className = 'timeline-scale';
+        // Tampilkan beberapa titik penunjuk saja agar rapi
+        ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00'].forEach(time => {
+            const span = document.createElement('span');
+            span.innerText = time;
+            scaleDiv.appendChild(span);
+        });
 
-            let statusText, cssClass;
-            if (status === 'free') {
-                statusText = "Waktu Luang"; cssClass = "slot-free";
-            } else if (status === 'consult') {
-                statusText = "Bimbingan"; cssClass = "slot-consult";
+        // 2. Buat Bar Utama
+        const barContainer = document.createElement('div');
+        barContainer.className = 'timeline-bar-container';
+
+        // TOTAL DURASI KERJA = 10 Jam = 600 Menit
+        const TOTAL_WORK_MINS = 600;
+
+        // Loop array jadwal yang dikirim dari backend (yang sudah presisi menit)
+        scheduleData.forEach(block => {
+            const blockDiv = document.createElement('div');
+
+            // Tentukan Class Warna
+            let cssClass = 'slot-free';
+            if (block.type === 'consult') cssClass = 'slot-consult';
+            else if (block.type === 'busy') cssClass = 'slot-busy';
+
+            // Hitung lebar berdasarkan persentase (Durasi Menit / Total Menit * 100)
+            const widthPercent = (block.durationMins / TOTAL_WORK_MINS) * 100;
+
+            blockDiv.className = `time-block ${cssClass}`;
+            blockDiv.style.width = `${widthPercent}%`;
+
+            // Hanya tampilkan teks jika lebarnya cukup (misal > 8%) agar tidak berantakan
+            if (widthPercent > 8) {
+                blockDiv.innerHTML = `
+                    <span class="block-title">${block.title}</span>
+                    <span class="block-time">${block.startStr} - ${block.endStr}</span>
+                `;
             } else {
-                statusText = "Sibuk"; cssClass = "slot-busy";
+                // Jika sangat sempit, jadikan tooltip (saat dihover muncul jamnya)
+                blockDiv.title = `${block.title}\n${block.startStr} - ${block.endStr}`;
             }
 
-            const slotDiv = document.createElement('div');
-            slotDiv.className = `time-slot ${cssClass}`;
-            slotDiv.innerHTML = `<span class="time-label">${timeKey} - ${endKey}</span><span>${statusText}</span>`;
+            barContainer.appendChild(blockDiv);
+        });
 
-            timelineContainer.appendChild(slotDiv);
-        }
+        wrapper.appendChild(scaleDiv);
+        wrapper.appendChild(barContainer);
+        timelineContainer.appendChild(wrapper);
+
     } catch (error) {
         console.error("Gagal memuat jadwal", error);
-        timelineContainer.innerHTML = '<div style="text-align:center; color:red; width:100%;">Gagal mengambil data dari server. Pastikan API backend sudah dibuat.</div>';
+        timelineContainer.innerHTML = '<div style="text-align:center; color:red; width:100%; padding:20px;">Gagal mengambil data dari server.</div>';
     }
 }
 
