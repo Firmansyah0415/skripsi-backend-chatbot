@@ -1,5 +1,6 @@
 // controllers/portalController.js
-const { db } = require('../config/firebase'); // Sesuaikan dengan path config firebase-mu
+const admin = require('firebase-admin');
+const db = admin.firestore();
 
 // API 1: Pencarian Dosen
 exports.searchDosen = async (req, res) => {
@@ -23,7 +24,7 @@ exports.searchDosen = async (req, res) => {
                 results.push({
                     uid: data.uid || doc.id,
                     name: fullName,
-                    univ: data.university || "Universitas" // Sesuaikan dengan field DB-mu
+                    univ: data.university || "Universitas" // Sesuaikan dengan field DB-mu jika ada
                 });
             }
         });
@@ -48,7 +49,7 @@ exports.getTimeline = async (req, res) => {
         const [year, month, day] = date.split('-');
         const formattedDateAndroid = `${day}/${month}/${year}`;
 
-        // 2. Dapatkan nama hari untuk Teaching Rules
+        // 2. Dapatkan nama hari untuk Teaching Schedules
         const dateObj = new Date(year, parseInt(month) - 1, day);
         const hariIndo = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
         const dayOfWeek = hariIndo[dateObj.getDay()];
@@ -73,19 +74,21 @@ exports.getTimeline = async (req, res) => {
             }
         };
 
-        // 3. Tarik data paralel dari 4 tabel
+        // 3. Tarik data paralel menggunakan arsitektur Sub-Collection milikmu!
+        const userRef = db.collection('users').doc(uid);
+
         const [tasksSnap, eventsSnap, consultSnap, teachingSnap] = await Promise.all([
-            db.collection('tasks').where('userId', '==', uid).where('date', '==', formattedDateAndroid).get(),
-            db.collection('events').where('userId', '==', uid).where('date', '==', formattedDateAndroid).get(),
-            db.collection('consultations').where('userId', '==', uid).where('date', '==', formattedDateAndroid).where('status', '==', 'SCHEDULED').get(),
-            db.collection('teaching_rules').where('userId', '==', uid).where('dayOfWeek', '==', dayOfWeek).get()
+            userRef.collection('tasks').where('date', '==', formattedDateAndroid).get(),
+            userRef.collection('events').where('date', '==', formattedDateAndroid).get(),
+            userRef.collection('consultations').where('date', '==', formattedDateAndroid).where('status', '==', 'SCHEDULED').get(),
+            userRef.collection('teaching_schedules').where('day_of_week', '==', dayOfWeek).get()
         ]);
 
-        // 4. Masukkan ke timeline
-        tasksSnap.forEach(doc => { const d = doc.data(); markTimeline(d.time, d.endTime, 'busy'); });
-        eventsSnap.forEach(doc => { const d = doc.data(); markTimeline(d.time, d.endTime, 'busy'); });
-        teachingSnap.forEach(doc => { const d = doc.data(); markTimeline(d.startTime, d.endTime, 'busy'); });
-        consultSnap.forEach(doc => { const d = doc.data(); markTimeline(d.startTime, d.endTime, 'consult'); });
+        // 4. Masukkan ke timeline sesuai dengan nama field di uploadController-mu
+        tasksSnap.forEach(doc => { const d = doc.data(); markTimeline(d.time, d.end_time, 'busy'); });
+        eventsSnap.forEach(doc => { const d = doc.data(); markTimeline(d.time, d.end_time, 'busy'); });
+        teachingSnap.forEach(doc => { const d = doc.data(); markTimeline(d.start_time, d.end_time, 'busy'); });
+        consultSnap.forEach(doc => { const d = doc.data(); markTimeline(d.start_time, d.end_time, 'consult'); });
 
         res.json({ status: 'success', data: timeline });
 
