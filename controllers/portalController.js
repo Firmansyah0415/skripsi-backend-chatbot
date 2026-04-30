@@ -18,7 +18,7 @@ exports.searchDosen = async (req, res) => {
 
         usersSnapshot.forEach(doc => {
             const data = doc.data();
-            const fullName = data.fullName || "";
+            const fullName = data.full_name || "";
 
             if (fullName.toLowerCase().includes(keywordLower)) {
                 results.push({
