@@ -79,7 +79,7 @@ function selectDosen(dosen) {
     renderTimeline(currentDosenId, datePicker.value);
 }
 
-// Di dalam file app.js (Frontend web portal)
+// Timpa hanya function renderTimeline ini di file app.js kamu:
 
 async function renderTimeline(dosenId, dateStr) {
     timelineContainer.innerHTML = '<div style="text-align:center; width:100%; padding: 20px;">Loading data dari Firestore...</div>';
@@ -91,58 +91,54 @@ async function renderTimeline(dosenId, dateStr) {
         const scheduleData = response.ok && result.data ? result.data : [];
         timelineContainer.innerHTML = ''; // Bersihkan loading
 
-        // Buat struktur Gantt Chart
+        // Buat struktur Vertical Timeline
         const wrapper = document.createElement('div');
-        wrapper.className = 'timeline-wrapper';
+        wrapper.className = 'vertical-timeline';
 
-        // 1. Buat Skala Penunjuk Jam (08:00 - 18:00)
-        const scaleDiv = document.createElement('div');
-        scaleDiv.className = 'timeline-scale';
-        // Tampilkan beberapa titik penunjuk saja agar rapi
-        ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00'].forEach(time => {
-            const span = document.createElement('span');
-            span.innerText = time;
-            scaleDiv.appendChild(span);
-        });
+        if (scheduleData.length === 0) {
+            timelineContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: #7f8c8d;">Tidak ada jadwal di tanggal ini.</div>';
+            return;
+        }
 
-        // 2. Buat Bar Utama
-        const barContainer = document.createElement('div');
-        barContainer.className = 'timeline-bar-container';
-
-        // TOTAL DURASI KERJA = 10 Jam = 600 Menit
-        const TOTAL_WORK_MINS = 600;
-
-        // Loop array jadwal yang dikirim dari backend (yang sudah presisi menit)
+        // Loop data dan buat elemen vertikal
         scheduleData.forEach(block => {
-            const blockDiv = document.createElement('div');
+            const item = document.createElement('div');
+            item.className = 'v-timeline-item';
 
-            // Tentukan Class Warna
-            let cssClass = 'slot-free';
-            if (block.type === 'consult') cssClass = 'slot-consult';
-            else if (block.type === 'busy') cssClass = 'slot-busy';
+            // Mapping Warna & Icon berdasarkan tipe
+            let statusClass = 'status-free';
+            let bgClass = 'bg-free';
+            let icon = '☕';
 
-            // Hitung lebar berdasarkan persentase (Durasi Menit / Total Menit * 100)
-            const widthPercent = (block.durationMins / TOTAL_WORK_MINS) * 100;
-
-            blockDiv.className = `time-block ${cssClass}`;
-            blockDiv.style.width = `${widthPercent}%`;
-
-            // Hanya tampilkan teks jika lebarnya cukup (misal > 8%) agar tidak berantakan
-            if (widthPercent > 8) {
-                blockDiv.innerHTML = `
-                    <span class="block-title">${block.title}</span>
-                    <span class="block-time">${block.startStr} - ${block.endStr}</span>
-                `;
-            } else {
-                // Jika sangat sempit, jadikan tooltip (saat dihover muncul jamnya)
-                blockDiv.title = `${block.title}\n${block.startStr} - ${block.endStr}`;
+            if (block.type === 'busy') {
+                statusClass = 'status-busy';
+                bgClass = 'bg-busy';
+                icon = '👨‍🏫';
+            } else if (block.type === 'consult') {
+                statusClass = 'status-consult';
+                bgClass = 'bg-consult';
+                icon = '💬';
             }
 
-            barContainer.appendChild(blockDiv);
+            item.innerHTML = `
+                <div class="v-time-col">
+                    <span class="v-time-start">${block.startStr}</span>
+                    <span class="v-time-end">${block.endStr}</span>
+                </div>
+                <div class="v-divider-col">
+                    <div class="v-line"></div>
+                    <div class="v-dot ${bgClass}">${icon}</div>
+                </div>
+                <div class="v-content-col">
+                    <div class="v-card ${statusClass}">
+                        <h4>${block.title}</h4>
+                        <p>⏱️ Durasi: ${block.durationMins} Menit</p>
+                    </div>
+                </div>
+            `;
+            wrapper.appendChild(item);
         });
 
-        wrapper.appendChild(scaleDiv);
-        wrapper.appendChild(barContainer);
         timelineContainer.appendChild(wrapper);
 
     } catch (error) {
