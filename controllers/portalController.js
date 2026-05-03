@@ -37,9 +37,10 @@ exports.searchDosen = async (req, res) => {
 };
 
 // API 2: Generate Timeline 12 Jam (Vertical UI)
+
 exports.getTimeline = async (req, res) => {
     try {
-        const { uid, date } = req.query; // date format: YYYY-MM-DD
+        const { uid, date } = req.query;
 
         if (!uid || !date) {
             return res.status(400).json({ status: 'error', message: 'Parameter uid dan date wajib diisi' });
@@ -48,13 +49,11 @@ exports.getTimeline = async (req, res) => {
         const [year, month, day] = date.split('-');
         const formattedDateAndroid = `${day}/${month}/${year}`;
 
-        // Konversi ke Date Object jam 00:00 untuk komparasi perhitungan presisi
         const targetDateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0);
 
         const hariIndo = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
         const dayOfWeek = hariIndo[targetDateObj.getDay()];
 
-        // Helper memparsing DD/MM/YYYY ke Date Object
         const parseDDMMYYYY = (dateStr) => {
             if (!dateStr) return null;
             const parts = dateStr.split('/');
@@ -103,7 +102,7 @@ exports.getTimeline = async (req, res) => {
             });
         };
 
-        // 1. Filter Tasks & Events (BUG 1 FIXED: Abaikan jika is_completed true)
+        // 1. TUGAS & ACARA = PRIVATE (busy)
         tasksSnap.forEach(doc => {
             const d = doc.data();
             if (d.is_completed === true) return;
@@ -116,38 +115,35 @@ exports.getTimeline = async (req, res) => {
             pushSchedule(d.time, d.end_time, 'busy', d.title);
         });
 
-        // 2. Filter Consultations
+        // 2. KONSULTASI = PUBLIK (consult)
         consultSnap.forEach(doc => {
             const d = doc.data();
             pushSchedule(d.start_time, d.end_time, 'consult', d.title);
         });
 
-        // 3. Filter Teaching Repetitions (BUG 2 FIXED: Hitung berdasarkan COUNT / DATE)
+        // 3. MENGAJAR = PUBLIK (teaching) - Menampilkan info ruang kelas jika ada
         teachingSnap.forEach(doc => {
             const d = doc.data();
             const startDateObj = parseDDMMYYYY(d.start_date);
 
-            if (!startDateObj) return; // Skip jika data rusak
-            if (targetDateObj < startDateObj) return; // Jadwal belum mulai di minggu ini
+            if (!startDateObj) return;
+            if (targetDateObj < startDateObj) return;
 
             if (d.repetition_type === 'COUNT') {
                 const count = parseInt(d.repetition_value) || 1;
-                // Hitung selisih minggu
                 const diffTime = targetDateObj - startDateObj;
                 const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                 const diffWeeks = Math.floor(diffDays / 7);
 
-                // Jika sudah melebihi jumlah pertemuan (misal 16), abaikan!
                 if (diffWeeks >= count) return;
-
             } else if (d.repetition_type === 'DATE') {
                 const endDateObj = parseDDMMYYYY(d.repetition_value);
-                // Jika tanggal hari ini melebihi tanggal berakhir repetisi, abaikan!
                 if (endDateObj && targetDateObj > endDateObj) return;
             }
 
-            // Jika lolos semua filter, masukkan ke timeline
-            pushSchedule(d.start_time, d.end_time, 'busy', d.course_name);
+            // Gunakan tipe 'teaching' dan gabungkan nama matkul + ruangan
+            const courseInfo = d.classroom && d.classroom !== '-' ? `${d.course_name} (${d.classroom})` : d.course_name;
+            pushSchedule(d.start_time, d.end_time, 'teaching', `Mengajar: ${courseInfo}`);
         });
 
         rawSchedules.sort((a, b) => a.start - b.start);
@@ -176,12 +172,18 @@ exports.getTimeline = async (req, res) => {
 
             if (sched.end > currentTime) {
                 const actualStart = Math.max(currentTime, sched.start);
+
+                // FILTER JUDUL PRIVASI
+                let finalTitle = sched.title;
+                if (sched.type === 'busy') finalTitle = 'Sibuk / Tidak Bisa Diganggu'; // Tugas & Acara disamarkan
+                else if (sched.type === 'consult') finalTitle = 'Bimbingan Akademik';
+
                 finalTimeline.push({
                     startStr: formatTime(actualStart),
                     endStr: formatTime(sched.end),
                     durationMins: sched.end - actualStart,
                     type: sched.type,
-                    title: sched.type === 'consult' ? 'Bimbingan' : 'Sibuk / Tidak Bisa Diganggu'
+                    title: finalTitle
                 });
                 currentTime = sched.end;
             }

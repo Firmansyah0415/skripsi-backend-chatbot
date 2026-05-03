@@ -105,19 +105,23 @@ async function renderTimeline(dosenId, dateStr) {
             const item = document.createElement('div');
             item.className = 'v-timeline-item';
 
-            // Mapping Warna & Icon berdasarkan tipe
+            // Mapping Warna & Icon berdasarkan tipe (Di dalam renderTimeline app.js)
             let statusClass = 'status-free';
             let bgClass = 'bg-free';
             let icon = '☕';
 
-            if (block.type === 'busy') {
+            if (block.type === 'busy') { // Tugas & Acara (Private)
                 statusClass = 'status-busy';
                 bgClass = 'bg-busy';
-                icon = '👨‍🏫';
-            } else if (block.type === 'consult') {
+                icon = '🔒'; // Ubah jadi ikon gembok agar terkesan private
+            } else if (block.type === 'consult') { // Konsultasi
                 statusClass = 'status-consult';
                 bgClass = 'bg-consult';
                 icon = '💬';
+            } else if (block.type === 'teaching') { // Mengajar (Publik)
+                statusClass = 'status-teaching';
+                bgClass = 'bg-teaching';
+                icon = '👨‍🏫'; // Ikon dosen
             }
 
             item.innerHTML = `

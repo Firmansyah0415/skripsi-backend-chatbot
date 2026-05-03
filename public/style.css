@@ -650,3 +650,20 @@ button:disabled {
 .bg-busy {
     background-color: #95a5a6;
 }
+
+/* Warna Status Tambahan: Mengajar & Legend Oranye */
+.status-teaching {
+    border-left-color: #f39c12;
+}
+
+.status-teaching .v-card h4 {
+    color: #d35400;
+}
+
+.bg-teaching {
+    background-color: #f39c12;
+}
+
+.badge-orange {
+    background-color: #f39c12;
+}
