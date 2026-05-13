@@ -219,7 +219,7 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
 };
 
 // ============================================================================
-// 4. FUNGSI DELETE (REVISI SOFT DELETE)
+// 4. FUNGSI DELETE (REVISI SOFT DELETE & ANTI HALUSINASI)
 // ============================================================================
 const processDeleteSchedule = async (res, userRef, message, contextData) => {
     const prompt = `
@@ -235,7 +235,7 @@ const processDeleteSchedule = async (res, userRef, message, contextData) => {
       "collection": "Koleksi jadwal tersebut (tasks / events / teaching_schedules / consultations)",
       "reply": "Teks konfirmasi penghapusan berhasil."
     }
-    Jika jadwal tidak ditemukan, kosongkan document_id dan isi reply dengan permintaan maaf.
+    Jika jadwal tidak ditemukan, JANGAN buat konfirmasi berhasil. Kosongkan document_id dan isi reply dengan permintaan maaf.
     `;
 
     const result = await generateWithFallback(prompt);
@@ -243,19 +243,25 @@ const processDeleteSchedule = async (res, userRef, message, contextData) => {
 
     try {
         const aiData = JSON.parse(cleanJson);
-        if (aiData.document_id) {
-            // PERBAIKAN: Gunakan UPDATE (Soft Delete) bukan DELETE (Hard Delete)
+
+        // CEK TEGAS: document_id harus ada dan tidak boleh string kosong
+        if (aiData.document_id && aiData.document_id.trim() !== "") {
+            // Lakukan Soft Delete
             await userRef.collection(aiData.collection).doc(aiData.document_id).update({
                 is_deleted: true,
                 updated_at: new Date().toISOString()
             });
             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
         } else {
-            return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+            // BENTENG ANTI HALUSINASI: Timpa balasan AI dengan pesan error kita sendiri
+            return res.json({
+                status: 'success',
+                reply: "Maaf, saya tidak dapat menemukan jadwal tersebut di database. Pastikan nama jadwalnya sesuai.\n\n🤖 *Lecturo Assistant*"
+            });
         }
     } catch (e) {
         console.error("Gagal parse Delete:", e);
-        return res.json({ status: 'error', reply: "Maaf, saya tidak dapat menemukan jadwal yang dimaksud.\n\n🤖 *Lecturo Assistant*" });
+        return res.json({ status: 'error', reply: "Maaf, saya gagal memproses permintaan hapus Anda.\n\n🤖 *Lecturo Assistant*" });
     }
 };
 
