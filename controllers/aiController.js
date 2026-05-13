@@ -219,7 +219,7 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
 };
 
 // ============================================================================
-// 4. FUNGSI DELETE
+// 4. FUNGSI DELETE (REVISI SOFT DELETE)
 // ============================================================================
 const processDeleteSchedule = async (res, userRef, message, contextData) => {
     const prompt = `
@@ -244,7 +244,11 @@ const processDeleteSchedule = async (res, userRef, message, contextData) => {
     try {
         const aiData = JSON.parse(cleanJson);
         if (aiData.document_id) {
-            await userRef.collection(aiData.collection).doc(aiData.document_id).delete();
+            // PERBAIKAN: Gunakan UPDATE (Soft Delete) bukan DELETE (Hard Delete)
+            await userRef.collection(aiData.collection).doc(aiData.document_id).update({
+                is_deleted: true,
+                updated_at: new Date().toISOString()
+            });
             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
         } else {
             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
