@@ -222,7 +222,23 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
 // 4. FUNGSI DELETE (KEMBALI KE HARD DELETE + ANTI HALUSINASI)
 // ============================================================================
 const processDeleteSchedule = async (res, userRef, message, contextData) => {
-    // ... (prompt tetap sama seperti sebelumnya) ...
+    // VARIABEL PROMPT DIKEMBALIKAN UTUH DI SINI
+    const prompt = `
+    Pesan user: "${message}"
+    
+    Berikut adalah jadwal user saat ini:
+    ${contextData}
+
+    Tugas: Cari tahu jadwal mana yang mau dihapus user dari data di atas.
+    Wajib kembalikan format JSON murni:
+    {
+      "document_id": "ID_DB dari jadwal yang mau dihapus",
+      "collection": "Koleksi jadwal tersebut (tasks / events / teaching_schedules / consultations)",
+      "reply": "Teks konfirmasi penghapusan berhasil."
+    }
+    Jika jadwal tidak ditemukan, JANGAN buat konfirmasi berhasil. Kosongkan document_id dan isi reply dengan permintaan maaf.
+    `;
+
     const result = await generateWithFallback(prompt);
     let cleanJson = (await result.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
 
