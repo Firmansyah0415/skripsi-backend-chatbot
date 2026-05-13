@@ -46,7 +46,6 @@ const syncEvent = async (req, res) => {
 };
 
 // 2. GET All Events by UID
-// 2. GET All Events by UID
 const getAllEvents = async (req, res) => {
     try {
         const { uid } = req.params;
@@ -55,13 +54,6 @@ const getAllEvents = async (req, res) => {
 
         snapshot.forEach(doc => {
             const data = doc.data();
-
-            // --- CEGAT DATA HANTU DI SINI ---
-            // Jika is_deleted bernilai true, lewati (jangan di-push ke array response Android)
-            if (data.is_deleted === true) {
-                return; // Lanjut ke dokumen berikutnya
-            }
-            // --------------------------------
 
             events.push({
                 firestoreId: doc.id, // PENTING: ID Cloud

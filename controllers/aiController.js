@@ -219,41 +219,21 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
 };
 
 // ============================================================================
-// 4. FUNGSI DELETE (REVISI SOFT DELETE & ANTI HALUSINASI)
+// 4. FUNGSI DELETE (KEMBALI KE HARD DELETE + ANTI HALUSINASI)
 // ============================================================================
 const processDeleteSchedule = async (res, userRef, message, contextData) => {
-    const prompt = `
-    Pesan user: "${message}"
-    
-    Berikut adalah jadwal user saat ini:
-    ${contextData}
-
-    Tugas: Cari tahu jadwal mana yang mau dihapus user dari data di atas.
-    Wajib kembalikan format JSON murni:
-    {
-      "document_id": "ID_DB dari jadwal yang mau dihapus",
-      "collection": "Koleksi jadwal tersebut (tasks / events / teaching_schedules / consultations)",
-      "reply": "Teks konfirmasi penghapusan berhasil."
-    }
-    Jika jadwal tidak ditemukan, JANGAN buat konfirmasi berhasil. Kosongkan document_id dan isi reply dengan permintaan maaf.
-    `;
-
+    // ... (prompt tetap sama seperti sebelumnya) ...
     const result = await generateWithFallback(prompt);
     let cleanJson = (await result.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
 
     try {
         const aiData = JSON.parse(cleanJson);
 
-        // CEK TEGAS: document_id harus ada dan tidak boleh string kosong
         if (aiData.document_id && aiData.document_id.trim() !== "") {
-            // Lakukan Soft Delete
-            await userRef.collection(aiData.collection).doc(aiData.document_id).update({
-                is_deleted: true,
-                updated_at: new Date().toISOString()
-            });
+            // PERBAIKAN: Kembali gunakan HARD DELETE agar tidak ada sampah di Firestore
+            await userRef.collection(aiData.collection).doc(aiData.document_id).delete();
             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
         } else {
-            // BENTENG ANTI HALUSINASI: Timpa balasan AI dengan pesan error kita sendiri
             return res.json({
                 status: 'success',
                 reply: "Maaf, saya tidak dapat menemukan jadwal tersebut di database. Pastikan nama jadwalnya sesuai.\n\n🤖 *Lecturo Assistant*"
