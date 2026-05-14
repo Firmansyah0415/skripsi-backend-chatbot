@@ -269,7 +269,6 @@ const chatWithGemini = async (req, res) => {
         const { message, uid, userName } = req.body;
         if (!message || !uid) return res.status(400).json({ error: 'Data tidak lengkap' });
 
-        const finalName = userName || "Dosen";
         const formatter = new Intl.DateTimeFormat('id-ID', {
             timeZone: 'Asia/Makassar',
             day: '2-digit',
@@ -284,6 +283,24 @@ const chatWithGemini = async (req, res) => {
         formattedNow = formattedNow.replace(/\./g, ':');
 
         const userRef = db.collection('users').doc(uid);
+
+        // --- TAMBAHAN BARU: AMBIL DATA PROFIL USER UNTUK CEK GENDER ---
+        const userSnap = await userRef.get();
+        const userData = userSnap.data() || {};
+        const gender = userData.gender || "";
+
+        // Tentukan panggilan sopan berdasarkan gender
+        let panggilan = "";
+        if (gender.toLowerCase() === "laki-laki") {
+            panggilan = "Bapak";
+        } else if (gender.toLowerCase() === "perempuan") {
+            panggilan = "Ibu";
+        }
+
+        // Gabungkan panggilan dengan nama asli (Contoh: "Bapak Firmansyah")
+        const finalName = userName || "Dosen";
+        const finalNameWithTitle = panggilan ? `${panggilan} ${finalName}` : finalName;
+        // ---------------------------------------------------------------
 
         const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
             userRef.collection('teaching_schedules').get(),
@@ -305,7 +322,7 @@ const chatWithGemini = async (req, res) => {
         const intentResult = await generateWithFallback(intentPrompt);
         const intentText = (await intentResult.response).text().toUpperCase();
 
-        console.log(`🤖 Intent Deteksi: ${intentText}`);
+        console.log(`🤖 Intent Deteksi: ${intentText} | User: ${finalNameWithTitle}`);
 
         if (intentText.includes('CREATE')) {
             return await processCreateSchedule(res, userRef, message, formattedNow);
@@ -314,7 +331,7 @@ const chatWithGemini = async (req, res) => {
             return await processDeleteSchedule(res, userRef, message, contextData);
         }
         else {
-            return await processReadSchedule(res, message, finalName, formattedNow, contextData);
+            return await processReadSchedule(res, message, finalNameWithTitle, formattedNow, contextData);
         }
 
     } catch (error) {
