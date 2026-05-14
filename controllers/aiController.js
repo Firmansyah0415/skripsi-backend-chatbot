@@ -126,6 +126,8 @@ const processReadSchedule = async (res, message, finalName, formattedNow, contex
         INSTRUKSI RESPON:
         - Jawab pertanyaan user: "${message}" secara sopan, ringkas dan to the point.
         - Jika user bertanya jadwal, tampilkan list sesuai format compact di atas.
+        - Jika user hanya menyapa (misal: "Halo", "Selamat Pagi"), balas sapaannya dengan menyebut nama user, lalu tawarkan bantuan untuk mengecek atau menambah jadwal.
+        - WAJIB TOLAK DENGAN SOPAN jika user menanyakan hal di luar konteks jadwal (seperti hitung-hitungan, koding, resep masakan, dll) meskipun ada unsur sapaan di dalamnya.
         - Jangan tampilkan deskripsi/catatan panjang agar chat tidak penuh.
         - Jangan pernah menampilkan ID_DB ke hadapan user.
     `;
@@ -316,8 +318,13 @@ const chatWithGemini = async (req, res) => {
         D. KONSULTASI:\n${formatConsultations(consultationSnap)}
         `;
 
-        const intentPrompt = `Pesan user: "${message}". Apakah tujuan user? 
-        Jawab HANYA DENGAN SATU KATA: "CREATE" (jika ingin menambah jadwal), "DELETE" (jika ingin menghapus/membatalkan jadwal), atau "READ" (jika bertanya, menyapa, atau melihat jadwal).`;
+        const intentPrompt = `Pesan user: "${message}". Apakah tujuan utama user? 
+        Pilih HANYA SATU KATA dari daftar berikut:
+        - "CREATE" (jika ingin menambah/membuat jadwal baru)
+        - "DELETE" (jika ingin menghapus/membatalkan jadwal)
+        - "READ" (jika menanyakan jadwal, meminta ringkasan, atau sekadar menyapa/salam)
+        - "OUT_OF_SCOPE" (jika bertanya hal di luar jadwal akademik, seperti matematika, coding, pengetahuan umum, cuaca, dll).
+        Jawab HANYA DENGAN SATU KATA tersebut tanpa tambahan apapun!`;
 
         const intentResult = await generateWithFallback(intentPrompt);
         const intentText = (await intentResult.response).text().toUpperCase();
@@ -329,6 +336,13 @@ const chatWithGemini = async (req, res) => {
         }
         else if (intentText.includes('DELETE')) {
             return await processDeleteSchedule(res, userRef, message, contextData);
+        }
+        else if (intentText.includes('OUT_OF_SCOPE') || intentText.includes('SCOPE')) {
+            // BENTENG PENGHEMAT KUOTA: Langsung balas pakai teks statis tanpa manggil AI lagi!
+            return res.json({
+                status: 'success',
+                reply: `Maaf ${finalNameWithTitle}, saya adalah asisten yang dirancang khusus hanya untuk mengelola jadwal akademik Anda. Saya tidak dapat menjawab pertanyaan terkait hal tersebut. 🙏\n\nSilakan tanyakan seputar jadwal mengajar, acara, tugas, atau bimbingan Anda.\n\n🤖 *Lecturo Assistant*`
+            });
         }
         else {
             return await processReadSchedule(res, message, finalNameWithTitle, formattedNow, contextData);
