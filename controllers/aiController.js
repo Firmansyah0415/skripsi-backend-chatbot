@@ -4,24 +4,32 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const generateWithFallback = async (prompt) => {
     try {
+        // 1. Coba ketuk pintu utama (gemini-2.5-flash dari config/gemini.js)
         return await model.generateContent(prompt);
     } catch (error) {
-        const isOverloaded = error.status === 503 ||
-            error.message.includes('503') ||
-            error.message.includes('high demand') ||
-            error.message.includes('Quota exceeded');
+        // 2. Jika pintu utama penuh atau kena limit (Error 503 / 429)
+        const isOverloaded = error.status === 503 || error.status === 429 ||
+            error.message.includes('503') || error.message.includes('429') ||
+            error.message.includes('high demand') || error.message.includes('Quota exceeded');
 
         if (isOverloaded) {
-            console.warn("⚠️ Server Gemini Utama Penuh! Mengalihkan ke Model Cadangan (gemini-1.5-flash)...");
+            console.warn("⚠️ Server Gemini Utama Penuh! Mengalihkan ke Model Cadangan (gemini-2.0-flash)...");
             try {
+                // Gunakan API Key yang ada
                 const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
                 const genAI = new GoogleGenerativeAI(apiKey);
-                const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+                // 3. Ketuk pintu cadangan yang BERBEDA agar tidak bertabrakan dengan antrean pintu utama
+                const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
                 return await fallbackModel.generateContent(prompt);
             } catch (fallbackError) {
+                // Jika pintu cadangan juga ikut penuh, lempar error ke bawah
                 throw fallbackError;
             }
         }
+
+        // Lempar error jika bukan karena masalah server penuh (misal: internet putus)
         throw error;
     }
 };
