@@ -2,6 +2,8 @@ const admin = require('firebase-admin');
 const db = admin.firestore();
 const fs = require('fs');
 const csv = require('csv-parser');
+// Tambahkan ini di bagian paling atas file uploadController.js
+const moment = require('moment');
 
 // --- FUNGSI SABUK PENGAMAN (NORMALISASI JAM KE 24-JAM) ---
 const normalizeTime = (timeStr) => {
@@ -170,23 +172,43 @@ const uploadScheduleCSV = async (req, res) => {
                         // 4. MAPPING TEACHING
                         else if (tipe === 'mengajar') {
                             collectionName = 'teaching_schedules';
-                            scheduleData = {
-                                course_name: judul,
-                                class_code: row.kode_kelas || '-',
-                                classroom: row.lokasi || '-',
-                                day_of_week: row.hari || '-',
-                                start_time: waktuMulai,
-                                end_time: waktuSelesai,
-                                student_count: parseInt(row.jml_mhs) || 0,
-                                start_date: tanggalFormattedDDMMYYYY,
-                                repetition_type: "COUNT",
-                                repetition_value: "1",
-                                notification_minutes: notificationMinutes,
-                                updated_at: nowISO
-                            };
-                        } else {
-                            errorCount++;
-                            continue;
+
+                            // Parse tanggal awal dari CSV
+                            const startDate = moment(tanggalFormattedDDMMYYYY, "DD/MM/YYYY");
+                            const count = parseInt(row.repetition_value) || 1; // Jumlah pertemuan
+
+                            // Lakukan Loop untuk mencetak jadwal fisik
+                            for (let i = 0; i < count; i++) {
+                                // Hitung tanggal pertemuan ke-i (tambah 7 hari per pertemuan)
+                                const meetingDate = startDate.clone().add(i * 7, 'days');
+
+                                const meetingData = {
+                                    user_id: uid, // Pastikan user_id tersimpan
+                                    course_name: judul,
+                                    class_code: row.kode_kelas || '-',
+                                    classroom: row.lokasi || '-',
+                                    day_of_week: row.hari || '-',
+                                    start_time: waktuMulai,
+                                    end_time: waktuSelesai,
+                                    student_count: parseInt(row.jml_mhs) || 0,
+
+                                    // --- FIELD YANG DITUNGGU ANDROID ---
+                                    date: meetingDate.format("DD/MM/YYYY"),
+                                    meeting_number: i + 1,
+                                    is_completed: false,
+                                    notification_minutes: notificationMinutes,
+                                    updated_at: nowISO
+                                };
+
+                                // Simpan setiap pertemuan sebagai dokumen terpisah
+                                const docRef = db.collection('users').doc(uid).collection(collectionName).doc();
+                                await docRef.set(meetingData);
+                            }
+
+                            // Jangan lakukan await docRef.set(scheduleData) di luar loop untuk tipe mengajar
+                            // Karena sudah ditangani di dalam loop di atas.
+                            successCount++;
+                            continue; // Lanjut ke row berikutnya
                         }
 
                         const docRef = db.collection('users').doc(uid).collection(collectionName).doc();
