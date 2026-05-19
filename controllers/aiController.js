@@ -42,7 +42,7 @@ const generateWithFallback = async (prompt) => {
 
 
 // ============================================================================
-// FUNGSI LM STUDIO (LOCAL AI) - NYALAKAN SAAT PENGETESAN
+// FUNGSI LM STUDIO (LOCAL AI) - UPDATE DENGAN ANTI-THINK FILTER
 // ============================================================================
 const generateWithFallback = async (prompt) => {
     try {
@@ -50,15 +50,16 @@ const generateWithFallback = async (prompt) => {
         const response = await fetch('https://diego-beaky-unappeasably.ngrok-free.dev/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
             },
             body: JSON.stringify({
-                model: "local-model", // LM Studio akan pakai model apa saja yang sedang aktif
+                model: "local-model",
                 messages: [
                     { role: "system", content: "Kamu adalah asisten akademik bernama Lecturo Assistant. Jawab dengan ringkas, sopan, dan sesuai instruksi tanpa basa-basi." },
                     { role: "user", content: prompt }
                 ],
-                temperature: 0.1, // Rendah agar stabil saat disuruh output format JSON
+                temperature: 0.1,
                 max_tokens: -1
             })
         });
@@ -68,10 +69,15 @@ const generateWithFallback = async (prompt) => {
         }
 
         const data = await response.json();
-        const aiResponseText = data.choices[0].message.content;
+        let aiResponseText = data.choices[0].message.content;
+
+        // =====================================================================
+        // 🔥 BARIS SAKTI BARU: SAPU BERSIH TAG <THINK>...</THINK> beserta isinya!
+        // =====================================================================
+        aiResponseText = aiResponseText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        // =====================================================================
 
         // BUNGKUS JAWABAN LM STUDIO AGAR TERLIHAT SEPERTI FORMAT GEMINI
-        // Dengan begini, kode di bawahnya (Read, Create, Delete) tidak akan sadar kalau AI-nya diganti!
         return {
             response: {
                 text: () => aiResponseText
