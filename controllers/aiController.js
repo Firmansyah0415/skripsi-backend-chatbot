@@ -47,7 +47,7 @@ const generateWithFallback = async (prompt) => {
 const generateWithFallback = async (prompt) => {
     try {
         console.log("🤖 Menghubungi LM Studio Local Server...");
-        const response = await fetch('http://localhost:1234/v1/chat/completions', {
+        const response = await fetch('https://diego-beaky-unappeasably.ngrok-free.dev/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
