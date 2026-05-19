@@ -2,6 +2,11 @@ const model = require('../config/gemini');
 const db = require('../config/firebaseConfig');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
+
+// ============================================================================
+// FUNGSI GEMINI (ASLI) - DIKOMENTARI SAAT TES LM STUDIO
+// ============================================================================
+/*
 const generateWithFallback = async (prompt) => {
     try {
         // 1. Coba ketuk pintu utama (gemini-2.5-flash dari config/gemini.js)
@@ -33,6 +38,53 @@ const generateWithFallback = async (prompt) => {
         throw error;
     }
 };
+*/
+
+
+// ============================================================================
+// FUNGSI LM STUDIO (LOCAL AI) - NYALAKAN SAAT PENGETESAN
+// ============================================================================
+const generateWithFallback = async (prompt) => {
+    try {
+        console.log("🤖 Menghubungi LM Studio Local Server...");
+        const response = await fetch('http://localhost:1234/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: "local-model", // LM Studio akan pakai model apa saja yang sedang aktif
+                messages: [
+                    { role: "system", content: "Kamu adalah asisten akademik bernama Lecturo Assistant. Jawab dengan ringkas, sopan, dan sesuai instruksi tanpa basa-basi." },
+                    { role: "user", content: prompt }
+                ],
+                temperature: 0.1, // Rendah agar stabil saat disuruh output format JSON
+                max_tokens: -1
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`LM Studio Error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const aiResponseText = data.choices[0].message.content;
+
+        // BUNGKUS JAWABAN LM STUDIO AGAR TERLIHAT SEPERTI FORMAT GEMINI
+        // Dengan begini, kode di bawahnya (Read, Create, Delete) tidak akan sadar kalau AI-nya diganti!
+        return {
+            response: {
+                text: () => aiResponseText
+            }
+        };
+
+    } catch (error) {
+        console.error("⚠️ Gagal menghubungi AI (LM Studio):", error);
+        throw error;
+    }
+};
+// ============================================================================
+
 
 // --- FUNGSI SABUK PENGAMAN (Otomatis Tambah 1 Jam jika end_time kosong) ---
 const addOneHour = (timeStr) => {
@@ -358,10 +410,26 @@ const chatWithGemini = async (req, res) => {
 
     } catch (error) {
         console.error("Error Chat AI:", error.message);
-        if (error.status === 429 || error.message.includes('Quota exceeded')) {
-            return res.json({ status: 'success', reply: "⚠️ *Server Sibuk*\n\nMohon tunggu sebentar.\n\n🤖 *Lecturo System*" });
+
+        // PERBAIKAN: Tangkap error sibuk/limit agar bot membalas dengan sopan
+        const isBusy = error.status === 429 || error.status === 503 ||
+            error.message.includes('Quota') || error.message.includes('429') ||
+            error.message.includes('503');
+
+        if (isBusy) {
+            // Gunakan finalNameWithTitle agar tegurannya tetap sopan sesuai gender
+            const namaSapaan = typeof finalNameWithTitle !== 'undefined' ? finalNameWithTitle : "Bapak/Ibu";
+
+            return res.json({
+                status: 'success',
+                reply: `⚠️ *Sistem Sedang Sibuk*\n\nMaaf ${namaSapaan}, layanan AI sedang menangani banyak permintaan. Mohon tunggu sekitar 1 menit lalu coba kirimkan pesan Anda lagi. 🙏\n\n🤖 *Lecturo System*`
+            });
         }
-        return res.json({ status: 'success', reply: "⚠️ *Terjadi Kesalahan*\n\nMaaf, saya gagal memuat data Anda." });
+
+        return res.json({
+            status: 'success',
+            reply: "⚠️ *Terjadi Kesalahan*\n\nMaaf, saya gagal memproses permintaan Anda saat ini."
+        });
     }
 };
 
