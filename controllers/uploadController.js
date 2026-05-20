@@ -122,13 +122,22 @@ const uploadScheduleCSV = async (req, res) => {
                         // 3. MAPPING CONSULTATIONS
                         else if (tipe === 'konsultasi') {
                             collectionName = 'consultations';
+                            // PERBAIKAN: Jika row.lokasi kosong/null/undefined, isi dengan "Belum ditentukan"
+                            const lokasiFix = (row.lokasi && row.lokasi.trim() !== '') ? row.lokasi : 'Belum ditentukan';
+
                             scheduleData = {
-                                title: judul, date: tanggalFormattedDDMMYYYY,
-                                start_time: waktuMulai, end_time: waktuSelesai,
-                                location: row.lokasi || '', description: row.deskripsi || '',
-                                priority: normalizePriority(row.prioritas), status: 'SCHEDULED',
-                                recurring_id: null, input_source: 'WEB_UPLOAD',
-                                notification_minutes: notificationMinutes, updated_at: nowISO
+                                title: judul,
+                                date: tanggalFormattedDDMMYYYY,
+                                start_time: waktuMulai,
+                                end_time: waktuSelesai,
+                                location: lokasiFix, // Sudah pakai variabel perbaikan
+                                description: row.deskripsi || '',
+                                priority: normalizePriority(row.prioritas),
+                                status: 'SCHEDULED',
+                                recurring_id: "",
+                                input_source: 'WEB_UPLOAD',
+                                notification_minutes: notificationMinutes,
+                                updated_at: nowISO
                             };
                         }
                         // 4. MAPPING TEACHING (1 BARIS = 1 DOKUMEN FISIK)
