@@ -108,7 +108,8 @@ const formatTeaching = (docs) => {
     let text = "";
     docs.forEach(doc => {
         const data = doc.data();
-        text += `[ID_DB: ${doc.id}] Matkul: "${data.course_name}". Hari: ${data.day_of_week}. Jam: ${data.start_time}-${data.end_time}. Ruang: ${data.classroom}.\n`;
+        // PERBAIKAN: Tambahkan date, meeting_number, dan is_completed
+        text += `[ID_DB: ${doc.id}] Matkul: "${data.course_name}" (Pertemuan ke-${data.meeting_number}). Tanggal: ${data.date} (${data.day_of_week}). Jam: ${data.start_time}-${data.end_time}. Ruang: ${data.classroom}. Selesai: ${data.is_completed}.\n`;
     });
     return text;
 };

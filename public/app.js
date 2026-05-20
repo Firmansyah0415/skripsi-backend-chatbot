@@ -201,11 +201,14 @@ window.onload = function () {
 };
 
 function downloadTemplate() {
-    const csvHeader = "tipe_jadwal,judul,tanggal,waktu_mulai,waktu_selesai,lokasi,deskripsi,kategori_event,kode_kelas,hari,jml_mhs,prioritas,pengingat\n";
-    const sampleData = "tugas,Periksa Laporan Bab 1,2026-03-15,09:00,,Ruang Dosen,Cek margin dan sitasi,,,,,Sedang,30\n" +
-        "mengajar,Pemrograman Mobile,2026-03-16,13:00,15:00,Lab Komputer 1,,,IF123,Senin,40,High,15\n" +
-        "event,Seminar AI Nasional,2026-03-20,08:00,,Aula Utama,Pembicara dari Google,Akademik,,,,Sedang,60\n" +
-        "konsultasi,Bimbingan Skripsi,2026-03-21,10:00,11:30,Ruang Dosen,Bawa draft revisi bab 3,,,,,Medium,15";
+    // KITA HAPUS KOLOM 'hari' DARI HEADER
+    const csvHeader = "tipe_jadwal,judul,tanggal,waktu_mulai,waktu_selesai,lokasi,deskripsi,kategori_event,kode_kelas,jml_mhs,prioritas,pengingat\n";
+
+    // KITA HAPUS DATA HARI DARI SAMPLE DATA BAWAHNYA
+    const sampleData = "tugas,Periksa Laporan Bab 1,2026-03-15,09:00,,Ruang Dosen,Cek margin dan sitasi,,,,Sedang,30\n" +
+        "mengajar,Pemrograman Mobile,2026-03-16,13:00,15:00,Lab Komputer 1,,,IF123,40,High,15\n" +
+        "event,Seminar AI Nasional,2026-03-20,08:00,,Aula Utama,Pembicara dari Google,Akademik,,,Sedang,60\n" +
+        "konsultasi,Bimbingan Skripsi,2026-03-21,10:00,11:30,Ruang Dosen,Bawa draft revisi bab 3,,,,Medium,15";
 
     const blob = new Blob([csvHeader + sampleData], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
