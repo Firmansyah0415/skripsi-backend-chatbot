@@ -2,7 +2,6 @@ const model = require('../config/gemini');
 const db = require('../config/firebaseConfig');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-
 // ============================================================================
 // FUNGSI GEMINI (ASLI) - DIKOMENTARI SAAT TES LM STUDIO
 // ============================================================================
@@ -39,7 +38,6 @@ const generateWithFallback = async (prompt) => {
     }
 };
 */
-
 
 // ============================================================================
 // FUNGSI LM STUDIO (LOCAL AI) - UPDATE DENGAN ANTI-THINK FILTER
@@ -108,7 +106,6 @@ const formatTeaching = (docs) => {
     let text = "";
     docs.forEach(doc => {
         const data = doc.data();
-        // PERBAIKAN: Tambahkan date, meeting_number, dan is_completed
         text += `[ID_DB: ${doc.id}] Matkul: "${data.course_name}" (Pertemuan ke-${data.meeting_number}). Tanggal: ${data.date} (${data.day_of_week}). Jam: ${data.start_time}-${data.end_time}. Ruang: ${data.classroom}. Selesai: ${data.is_completed}.\n`;
     });
     return text;
@@ -119,8 +116,7 @@ const formatEvents = (docs) => {
     let text = "";
     docs.forEach(doc => {
         const data = doc.data();
-        // PERBAIKAN: Menambahkan end_time ke konteks baca AI
-        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". Tanggal: ${data.date}. Jam: ${data.time}-${data.end_time || ''}. Lokasi: ${data.location}. IsCompleted: ${data.is_completed}.\n`;
+        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". Tanggal: ${data.date}. Jam: ${data.time}-${data.end_time || ''}. Lokasi: ${data.location}. IsCompleted: ${data.is_completed}. Prioritas: ${data.priority || 'Sedang'}.\n`;
     });
     return text;
 };
@@ -130,8 +126,7 @@ const formatTasks = (docs) => {
     let text = "";
     docs.forEach(doc => {
         const data = doc.data();
-        // PERBAIKAN: Menambahkan end_time ke konteks baca AI
-        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". DeadlineTanggal: ${data.date}. Jam: ${data.time}-${data.end_time || ''}. IsCompleted: ${data.is_completed}.\n`;
+        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". DeadlineTanggal: ${data.date}. Jam: ${data.time}-${data.end_time || ''}. IsCompleted: ${data.is_completed}. Prioritas: ${data.priority || 'Sedang'}.\n`;
     });
     return text;
 };
@@ -141,7 +136,7 @@ const formatConsultations = (docs) => {
     let text = "";
     docs.forEach(doc => {
         const data = doc.data();
-        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". Tanggal: ${data.date}. Jam: ${data.start_time}-${data.end_time}. Status: ${data.status}.\n`;
+        text += `[ID_DB: ${doc.id}] Judul: "${data.title}". Tanggal: ${data.date}. Jam: ${data.start_time}-${data.end_time}. Status: ${data.status}. Prioritas: ${data.priority || 'Sedang'}.\n`;
     });
     return text;
 };
@@ -168,35 +163,32 @@ const processReadSchedule = async (res, message, finalName, formattedNow, contex
         
         2. Format Tampilan Per Item (Jangan tampilkan ID_DB, sembunyikan ID_DB dari user):
            - Judul harus di-Bold (*Judul*).
-           - Baris Metadata: 🔴 [Prioritas] | [Status Emoticon] [Status Teks]
+           - Baris Metadata: 🔴/🟡/🟢 [Prioritas] | [Status Emoticon] [Status Teks]
            - Baris Waktu: 📅 [Tanggal] ⏰ [Jam Mulai] - [Jam Selesai]
            - Baris Lokasi (Jika ada): 📍 [Lokasi]
 
         ATURAN LOGIKA STATUS & EMOTIKON (PENTING):
-        Cek field 'IsCompleted' dan Bandingkan Waktu Jadwal dengan 'Waktu Saat Ini':
-        - Status: Selesai (IsCompleted = true) -> Gunakan emot ✅ [Selesai].
-        - Status: Belum Selesai TAPI Waktu Jadwal > Waktu Saat Ini -> Gunakan emot ⏳ [Upcoming].
-        - Status: Belum Selesai DAN Waktu Jadwal < Waktu Saat Ini (Kadaluarsa) -> Gunakan emot ⛔ [Terlewat].
+        Cek field 'IsCompleted' (Atau 'Status' untuk Konsultasi) dan Bandingkan Waktu Jadwal dengan 'Waktu Saat Ini':
+        - Jika IsCompleted = true ATAU Status = COMPLETED -> ✅ [Selesai].
+        - Jika IsCompleted = false ATAU Status = SCHEDULED -> ⏳ [Upcoming] (Jika jadwal belum lewat) ATAU ⛔ [Terlewat] (Jika waktu sudah kadaluarsa).
 
-        ATURAN PRIORITAS:
-        - High/Tinggi = 🔴 Tinggi
-        - Medium/Sedang = 🟡 Sedang
-        - Low/Rendah = 🟢 Rendah
+        ATURAN PRIORITAS (WAJIB IKUTI WARNA INI SAJA):
+        - Jika prioritas bertuliskan "Tinggi" atau "High" -> Gunakan 🔴 Tinggi
+        - Jika prioritas bertuliskan "Sedang", "Medium", ATAU KOSONG -> Gunakan 🟡 Sedang
+        - Jika prioritas bertuliskan "Rendah" atau "Low" -> Gunakan 🟢 Rendah
 
         CONTOH FORMAT OUTPUT:
         🎓 **JADWAL BIMBINGAN**
         1. *Bimbingan Skripsi & KP*
-           🔴 Tinggi | ⏳ Upcoming
+           🟡 Sedang | ⏳ Upcoming
            📅 20/02/2026 ⏰ 09:00 - 12:00
            📍 Lab RPL
 
         INSTRUKSI RESPON:
         - Jawab pertanyaan user: "${message}" secara sopan, ringkas dan to the point.
         - Jika user bertanya jadwal, tampilkan list sesuai format compact di atas.
-        - Jika user hanya menyapa (misal: "Halo", "Selamat Pagi"), balas sapaannya dengan menyebut nama user, lalu tawarkan bantuan untuk mengecek atau menambah jadwal.
-        - WAJIB TOLAK DENGAN SOPAN jika user menanyakan hal di luar konteks jadwal (seperti hitung-hitungan, koding, resep masakan, dll) meskipun ada unsur sapaan di dalamnya.
-        - Jangan tampilkan deskripsi/catatan panjang agar chat tidak penuh.
-        - Jangan pernah menampilkan ID_DB ke hadapan user.
+        - Jika user hanya menyapa, balas sapaannya dengan menyebut nama user, lalu tawarkan bantuan.
+        - WAJIB TOLAK DENGAN SOPAN jika user menanyakan hal di luar konteks jadwal.
     `;
 
     const result = await generateWithFallback(prompt);
@@ -220,28 +212,25 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
     {
       "is_data_complete": true atau false,
       "collection": "tasks" ATAU "events" ATAU "teaching_schedules" ATAU "consultations" ATAU "none",
-      "data": {
-        // isi sesuai kebutuhan struktur di bawah
-      },
+      "data": { ... },
       "reply": "Teks balasan untuk user."
     }
 
-    ATURAN VALIDASI (SANGAT PENTING):
-    - Hitung tanggal secara akurat berdasarkan WAKTU SAAT INI (${formattedNow}).
-    - JANGAN PERNAH MENGGUNAKAN TANGGAL DI MASA LALU. Selalu gunakan tahun berjalan (2026 atau lebih).
-    - Jika user bertanya panduan, jelaskan cara pakai bot secara singkat.
-    - Untuk membuat jadwal, user WAJIB minimal menyebutkan: JUDUL (Title) dan WAKTU (Tanggal/Jam).
-    - Jika "is_data_complete" false, isi "reply" dengan pertanyaan meminta data yang kurang.
-    - Jika "is_data_complete" true, isi "data" dengan:
-      > tasks: title, date (DD/MM/YYYY), time (HH:mm), end_time (HH:mm), priority (Tinggi/Sedang/Rendah), location, description.
-      > events: title, category (Rapat/Seminar/Lainnya), date (DD/MM/YYYY), time (HH:mm), end_time (HH:mm), priority, location, description.
-      > consultations: title, date (DD/MM/YYYY), start_time, end_time, location, description, status ("SCHEDULED").
-      > teaching_schedules: course_name, day_of_week, start_time, end_time, classroom.
+    ATURAN KOLEKSI (WAJIB DIIKUTI AGAR TIDAK SALAH KAMAR):
+    - Jika user menyuruh buat "Tugas", WAJIB gunakan collection: "tasks". JANGAN gunakan teaching_schedules.
+    - Jika user menyuruh buat "Mengajar" atau "Kuliah", WAJIB gunakan collection: "teaching_schedules".
+    - Jika user menyuruh buat "Konsultasi" atau "Bimbingan", WAJIB gunakan collection: "consultations".
+    - Jika user menyuruh buat "Acara", "Event", atau "Rapat", WAJIB gunakan collection: "events".
 
-    ATURAN PENGISIAN FIELD KOSONG (WAJIB):
-    Jika user tidak menyebutkan lokasi atau deskripsi, KAMU WAJIB MENGISINYA DENGAN STRING KOSONG "".
-    Jika user tidak menyebutkan waktu selesai (end_time), KAMU WAJIB MENGISINYA dengan estimasi 1 jam setelah jam mulai (time).
-    JANGAN PERNAH menggunakan null, dan JANGAN PERNAH menghilangkan atribut tersebut dari JSON!
+    ATURAN TANGGAL & WAKTU:
+    - Hitung tanggal secara akurat berdasarkan WAKTU SAAT INI (${formattedNow}). Jika user bilang "besok", tambahkan 1 hari ke tanggal saat ini.
+    - JANGAN PERNAH MENGGUNAKAN TANGGAL DI MASA LALU.
+
+    FORMAT PENGISIAN FIELD "data":
+    > tasks: title, date (DD/MM/YYYY), time (HH:mm), end_time (HH:mm), priority (Tinggi/Sedang/Rendah), location, description.
+    > events: title, category (Rapat/Seminar/Lainnya), date (DD/MM/YYYY), time (HH:mm), end_time (HH:mm), priority, location, description.
+    > consultations: title, date (DD/MM/YYYY), start_time (HH:mm), end_time (HH:mm), priority, location, description.
+    > teaching_schedules: course_name, class_code, day_of_week, date (DD/MM/YYYY), start_time (HH:mm), end_time (HH:mm), classroom, meeting_number (isi dengan angka 1), student_count (isi dengan angka 0).
     `;
 
     const result = await generateWithFallback(prompt);
@@ -252,27 +241,55 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
 
         if (aiData.is_data_complete === true && aiData.collection !== 'none') {
 
-            // --- 🛡️ SABUK PENGAMAN (SANITIZER) ---
             const sanitizedData = {};
             for (const key in aiData.data) {
                 sanitizedData[key] = (aiData.data[key] === null || aiData.data[key] === undefined) ? "" : aiData.data[key];
             }
 
             if (!('description' in sanitizedData)) sanitizedData.description = "";
-            if (!('location' in sanitizedData)) sanitizedData.location = "";
-
-            // PERBAIKAN: Sabuk pengaman ganda jika AI lupa memberi end_time
-            if (!('end_time' in sanitizedData) || sanitizedData.end_time === "") {
-                sanitizedData.end_time = addOneHour(sanitizedData.time || "");
+            if (!('location' in sanitizedData) || !('classroom' in sanitizedData)) {
+                if (aiData.collection === 'teaching_schedules') sanitizedData.classroom = "";
+                else sanitizedData.location = "";
             }
 
+            if (!('end_time' in sanitizedData) || sanitizedData.end_time === "") {
+                const startTimeToUse = sanitizedData.time || sanitizedData.start_time || "08:00";
+                sanitizedData.end_time = addOneHour(startTimeToUse);
+            }
+
+            // 🟡 PERBAIKAN: Default Priority jika kosong atau aneh
+            if (!sanitizedData.priority || sanitizedData.priority === "") {
+                sanitizedData.priority = "Sedang";
+            } else {
+                const p = sanitizedData.priority.toLowerCase();
+                if (['tinggi', 'high', 'urgent'].includes(p)) sanitizedData.priority = "Tinggi";
+                else if (['rendah', 'low', 'santai'].includes(p)) sanitizedData.priority = "Rendah";
+                else sanitizedData.priority = "Sedang";
+            }
+
+            // PAYLOAD STANDAR
             const finalData = {
                 ...sanitizedData,
                 input_source: 'WA_BOT',
                 updated_at: new Date().toISOString(),
-                is_completed: false,
                 notification_minutes: 15
             };
+
+            // 🎯 FILTER KOLEKSI SPESIFIK
+            if (aiData.collection === 'consultations') {
+                finalData.status = 'SCHEDULED';
+                finalData.recurring_id = "";
+                delete finalData.is_completed; // Mencegah is_completed masuk ke DB
+            }
+            else if (aiData.collection === 'teaching_schedules') {
+                finalData.is_completed = false;
+                finalData.meeting_number = parseInt(sanitizedData.meeting_number) || 1;
+                finalData.student_count = parseInt(sanitizedData.student_count) || 0;
+                if (!finalData.class_code) finalData.class_code = "-";
+            }
+            else {
+                finalData.is_completed = false;
+            }
 
             await userRef.collection(aiData.collection).add(finalData);
             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
@@ -291,7 +308,6 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
 // 4. FUNGSI DELETE (KEMBALI KE HARD DELETE + ANTI HALUSINASI)
 // ============================================================================
 const processDeleteSchedule = async (res, userRef, message, contextData) => {
-    // VARIABEL PROMPT DIKEMBALIKAN UTUH DI SINI
     const prompt = `
     Pesan user: "${message}"
     
@@ -315,7 +331,6 @@ const processDeleteSchedule = async (res, userRef, message, contextData) => {
         const aiData = JSON.parse(cleanJson);
 
         if (aiData.document_id && aiData.document_id.trim() !== "") {
-            // PERBAIKAN: Kembali gunakan HARD DELETE agar tidak ada sampah di Firestore
             await userRef.collection(aiData.collection).doc(aiData.document_id).delete();
             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
         } else {
@@ -353,12 +368,10 @@ const chatWithGemini = async (req, res) => {
 
         const userRef = db.collection('users').doc(uid);
 
-        // --- TAMBAHAN BARU: AMBIL DATA PROFIL USER UNTUK CEK GENDER ---
         const userSnap = await userRef.get();
         const userData = userSnap.data() || {};
         const gender = userData.gender || "";
 
-        // Tentukan panggilan sopan berdasarkan gender
         let panggilan = "";
         if (gender.toLowerCase() === "laki-laki") {
             panggilan = "Bapak";
@@ -366,10 +379,8 @@ const chatWithGemini = async (req, res) => {
             panggilan = "Ibu";
         }
 
-        // Gabungkan panggilan dengan nama asli (Contoh: "Bapak Firmansyah")
         const finalName = userName || "Dosen";
         const finalNameWithTitle = panggilan ? `${panggilan} ${finalName}` : finalName;
-        // ---------------------------------------------------------------
 
         const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
             userRef.collection('teaching_schedules').get(),
@@ -405,7 +416,6 @@ const chatWithGemini = async (req, res) => {
             return await processDeleteSchedule(res, userRef, message, contextData);
         }
         else if (intentText.includes('OUT_OF_SCOPE') || intentText.includes('SCOPE')) {
-            // BENTENG PENGHEMAT KUOTA: Langsung balas pakai teks statis tanpa manggil AI lagi!
             return res.json({
                 status: 'success',
                 reply: `Maaf ${finalNameWithTitle}, saya adalah asisten yang dirancang khusus hanya untuk mengelola jadwal akademik Anda. Saya tidak dapat menjawab pertanyaan terkait hal tersebut. 🙏\n\nSilakan tanyakan seputar jadwal mengajar, acara, tugas, atau bimbingan Anda.\n\n🤖 *Lecturo Assistant*`
@@ -418,13 +428,11 @@ const chatWithGemini = async (req, res) => {
     } catch (error) {
         console.error("Error Chat AI:", error.message);
 
-        // PERBAIKAN: Tangkap error sibuk/limit agar bot membalas dengan sopan
         const isBusy = error.status === 429 || error.status === 503 ||
             error.message.includes('Quota') || error.message.includes('429') ||
             error.message.includes('503');
 
         if (isBusy) {
-            // Gunakan finalNameWithTitle agar tegurannya tetap sopan sesuai gender
             const namaSapaan = typeof finalNameWithTitle !== 'undefined' ? finalNameWithTitle : "Bapak/Ibu";
 
             return res.json({
