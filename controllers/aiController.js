@@ -281,12 +281,26 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
                 finalData.recurring_id = "";
                 delete finalData.is_completed; // Mencegah is_completed masuk ke DB
             }
+            // =======================================================
+            // 🔴 GANTI BLOK TEACHING_SCHEDULES INI SAJA
+            // =======================================================
             else if (aiData.collection === 'teaching_schedules') {
                 finalData.is_completed = false;
                 finalData.meeting_number = parseInt(sanitizedData.meeting_number) || 1;
+
+                // 1. Pastikan student_count diisi 0 jika gagal di-parse atau tidak ada
                 finalData.student_count = parseInt(sanitizedData.student_count) || 0;
+
+                // 2. Pastikan classroom string kosong ("") jika user tidak menyebutkan lokasi
+                finalData.classroom = sanitizedData.classroom || "";
+
                 if (!finalData.class_code) finalData.class_code = "-";
+
+                // 3. HAPUS PAKSA description dan priority agar sama persis dengan Android & Web!
+                delete finalData.description;
+                delete finalData.priority;
             }
+            // =======================================================
             else {
                 finalData.is_completed = false;
             }

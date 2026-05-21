@@ -97,12 +97,17 @@ const uploadScheduleCSV = async (req, res) => {
                         if (tipe === 'tugas') {
                             collectionName = 'tasks';
                             scheduleData = {
-                                title: judul, date: tanggalFormattedDDMMYYYY,
-                                time: waktuMulai, end_time: waktuSelesai,
-                                location: row.lokasi || '', description: row.deskripsi || '',
+                                title: judul,
+                                date: tanggalFormattedDDMMYYYY,
+                                time: waktuMulai,
+                                end_time: waktuSelesai,
+                                location: row.lokasi || '',
+                                description: row.deskripsi || '',
                                 priority: normalizePriority(row.prioritas),
-                                input_source: 'WEB_UPLOAD', is_completed: false,
-                                notification_minutes: notificationMinutes, updated_at: nowISO
+                                input_source: 'WEB_UPLOAD',
+                                is_completed: false,
+                                notification_minutes: notificationMinutes,
+                                updated_at: nowISO
                             };
                         }
                         // 2. MAPPING EVENTS
@@ -111,12 +116,18 @@ const uploadScheduleCSV = async (req, res) => {
                             const validCat = ['Rapat', 'Seminar', 'Webinar', 'Workshop', 'Lokakarya', 'Penelitian', 'Pengabdian Masyarakat', 'Lainnya'];
                             const matchCat = validCat.find(c => c.toLowerCase() === (row.kategori_event || '').toLowerCase());
                             scheduleData = {
-                                title: judul, category: matchCat || 'Lainnya', date: tanggalFormattedDDMMYYYY,
-                                time: waktuMulai, end_time: waktuSelesai,
-                                location: row.lokasi || '', description: row.deskripsi || '',
+                                title: judul,
+                                category: matchCat || 'Lainnya',
+                                date: tanggalFormattedDDMMYYYY,
+                                time: waktuMulai,
+                                end_time: waktuSelesai,
+                                location: row.lokasi || '',
+                                description: row.deskripsi || '',
                                 priority: normalizePriority(row.prioritas),
-                                input_source: 'WEB_UPLOAD', is_completed: false,
-                                notification_minutes: notificationMinutes, updated_at: nowISO
+                                input_source: 'WEB_UPLOAD',
+                                is_completed: false,
+                                notification_minutes: notificationMinutes,
+                                updated_at: nowISO
                             };
                         }
                         // 3. MAPPING CONSULTATIONS
@@ -153,6 +164,7 @@ const uploadScheduleCSV = async (req, res) => {
                                 end_time: waktuSelesai,
                                 student_count: parseInt(row.jml_mhs) || 0,
                                 meeting_number: 1, // Web hanya upload 1 pertemuan. Looping ada di Android.
+                                input_source: 'WEB_UPLOAD',
                                 is_completed: false,
                                 notification_minutes: notificationMinutes,
                                 updated_at: nowISO
