@@ -247,82 +247,83 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
             }
 
             if (!('description' in sanitizedData)) sanitizedData.description = "";
-
             // 🔴 PERBAIKAN BUG LOKASI/CLASSROOM KOSONG
             if (aiData.collection === 'teaching_schedules') {
                 if (!('classroom' in sanitizedData)) sanitizedData.classroom = "";
             } else {
                 if (!('location' in sanitizedData)) sanitizedData.location = "";
             }
-
             if (!('end_time' in sanitizedData) || sanitizedData.end_time === "") {
-
-                // 🟡 PERBAIKAN: Default Priority jika kosong atau aneh
-                if (!sanitizedData.priority || sanitizedData.priority === "") {
-                    sanitizedData.priority = "Sedang";
-                } else {
-                    const p = sanitizedData.priority.toLowerCase();
-                    if (['tinggi', 'high', 'urgent'].includes(p)) sanitizedData.priority = "Tinggi";
-                    else if (['rendah', 'low', 'santai'].includes(p)) sanitizedData.priority = "Rendah";
-                    else sanitizedData.priority = "Sedang";
-                }
-
-                // PAYLOAD STANDAR
-                const finalData = {
-                    ...sanitizedData,
-                    input_source: 'WA_BOT',
-                    updated_at: new Date().toISOString(),
-                    notification_minutes: 15
-                };
-
-                // 🎯 FILTER KOLEKSI SPESIFIK
-                if (aiData.collection === 'consultations') {
-                    finalData.status = 'SCHEDULED';
-                    finalData.recurring_id = "";
-                    delete finalData.is_completed; // Mencegah is_completed masuk ke DB
-                }
-                // =======================================================
-                // 🔴 GANTI BLOK TEACHING_SCHEDULES INI SAJA
-                // =======================================================
-                else if (aiData.collection === 'teaching_schedules') {
-                    finalData.is_completed = false;
-                    finalData.meeting_number = parseInt(sanitizedData.meeting_number) || 1;
-
-                    // 1. Pastikan student_count diisi 0 jika gagal di-parse atau tidak ada
-                    finalData.student_count = parseInt(sanitizedData.student_count) || 0;
-
-                    // 2. Pastikan classroom string kosong ("") jika user tidak menyebutkan lokasi
-                    finalData.classroom = sanitizedData.classroom || "";
-
-                    if (!finalData.class_code) finalData.class_code = "-";
-
-                    // 3. HAPUS PAKSA description dan priority agar sama persis dengan Android & Web!
-                    delete finalData.description;
-                    delete finalData.priority;
-                }
-                // =======================================================
-                else {
-                    finalData.is_completed = false;
-                }
-
-                await userRef.collection(aiData.collection).add(finalData);
-                return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+                const startTimeToUse = sanitizedData.time || sanitizedData.start_time || "08:00";
+                sanitizedData.end_time = addOneHour(startTimeToUse);
             }
+
+            // 🟡 PERBAIKAN: Default Priority jika kosong atau aneh
+            if (!sanitizedData.priority || sanitizedData.priority === "") {
+                sanitizedData.priority = "Sedang";
+            } else {
+                const p = sanitizedData.priority.toLowerCase();
+                if (['tinggi', 'high', 'urgent'].includes(p)) sanitizedData.priority = "Tinggi";
+                else if (['rendah', 'low', 'santai'].includes(p)) sanitizedData.priority = "Rendah";
+                else sanitizedData.priority = "Sedang";
+            }
+
+            // PAYLOAD STANDAR
+            const finalData = {
+                ...sanitizedData,
+                input_source: 'WA_BOT',
+                updated_at: new Date().toISOString(),
+                notification_minutes: 15
+            };
+
+            // 🎯 FILTER KOLEKSI SPESIFIK
+            if (aiData.collection === 'consultations') {
+                finalData.status = 'SCHEDULED';
+                finalData.recurring_id = "";
+                delete finalData.is_completed; // Mencegah is_completed masuk ke DB
+            }
+            // =======================================================
+            // 🔴 GANTI BLOK TEACHING_SCHEDULES INI SAJA
+            // =======================================================
+            else if (aiData.collection === 'teaching_schedules') {
+                finalData.is_completed = false;
+                finalData.meeting_number = parseInt(sanitizedData.meeting_number) || 1;
+
+                // 1. Pastikan student_count diisi 0 jika gagal di-parse atau tidak ada
+                finalData.student_count = parseInt(sanitizedData.student_count) || 0;
+
+                // 2. Pastikan classroom string kosong ("") jika user tidak menyebutkan lokasi
+                finalData.classroom = sanitizedData.classroom || "";
+
+                if (!finalData.class_code) finalData.class_code = "-";
+
+                // 3. HAPUS PAKSA description dan priority agar sama persis dengan Android & Web!
+                delete finalData.description;
+                delete finalData.priority;
+            }
+            // =======================================================
             else {
-                return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+                finalData.is_completed = false;
             }
 
-        } catch (e) {
-            console.error("Gagal parse Create:", e);
-            return res.json({ status: 'error', reply: "Maaf, format jadwal tidak dapat saya pahami. Mohon sebutkan nama acara dan waktunya dengan jelas.\n\n🤖 *Lecturo Assistant*" });
+            await userRef.collection(aiData.collection).add(finalData);
+            return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
         }
-    };
+        else {
+            return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+        }
 
-    // ============================================================================
-    // 4. FUNGSI DELETE (KEMBALI KE HARD DELETE + ANTI HALUSINASI)
-    // ============================================================================
-    const processDeleteSchedule = async (res, userRef, message, contextData) => {
-        const prompt = `
+    } catch (e) {
+        console.error("Gagal parse Create:", e);
+        return res.json({ status: 'error', reply: "Maaf, format jadwal tidak dapat saya pahami. Mohon sebutkan nama acara dan waktunya dengan jelas.\n\n🤖 *Lecturo Assistant*" });
+    }
+};
+
+// ============================================================================
+// 4. FUNGSI DELETE (KEMBALI KE HARD DELETE + ANTI HALUSINASI)
+// ============================================================================
+const processDeleteSchedule = async (res, userRef, message, contextData) => {
+    const prompt = `
     Pesan user: "${message}"
     
     Berikut adalah jadwal user saat ini:
@@ -338,79 +339,79 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
     Jika jadwal tidak ditemukan, JANGAN buat konfirmasi berhasil. Kosongkan document_id dan isi reply dengan permintaan maaf.
     `;
 
-        const result = await generateWithFallback(prompt);
-        let cleanJson = (await result.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
+    const result = await generateWithFallback(prompt);
+    let cleanJson = (await result.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
 
-        try {
-            const aiData = JSON.parse(cleanJson);
+    try {
+        const aiData = JSON.parse(cleanJson);
 
-            if (aiData.document_id && aiData.document_id.trim() !== "") {
-                await userRef.collection(aiData.collection).doc(aiData.document_id).delete();
-                return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
-            } else {
-                return res.json({
-                    status: 'success',
-                    reply: "Maaf, saya tidak dapat menemukan jadwal tersebut di database. Pastikan nama jadwalnya sesuai.\n\n🤖 *Lecturo Assistant*"
-                });
-            }
-        } catch (e) {
-            console.error("Gagal parse Delete:", e);
-            return res.json({ status: 'error', reply: "Maaf, saya gagal memproses permintaan hapus Anda.\n\n🤖 *Lecturo Assistant*" });
-        }
-    };
-
-    // ============================================================================
-    // 5. ORKESTRATOR (GERBANG UTAMA CHATBOT)
-    // ============================================================================
-    const chatWithGemini = async (req, res) => {
-        try {
-            const { message, uid, userName } = req.body;
-            if (!message || !uid) return res.status(400).json({ error: 'Data tidak lengkap' });
-
-            const formatter = new Intl.DateTimeFormat('id-ID', {
-                timeZone: 'Asia/Makassar',
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
+        if (aiData.document_id && aiData.document_id.trim() !== "") {
+            await userRef.collection(aiData.collection).doc(aiData.document_id).delete();
+            return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+        } else {
+            return res.json({
+                status: 'success',
+                reply: "Maaf, saya tidak dapat menemukan jadwal tersebut di database. Pastikan nama jadwalnya sesuai.\n\n🤖 *Lecturo Assistant*"
             });
+        }
+    } catch (e) {
+        console.error("Gagal parse Delete:", e);
+        return res.json({ status: 'error', reply: "Maaf, saya gagal memproses permintaan hapus Anda.\n\n🤖 *Lecturo Assistant*" });
+    }
+};
 
-            let formattedNow = formatter.format(new Date());
-            formattedNow = formattedNow.replace(/\./g, ':');
+// ============================================================================
+// 5. ORKESTRATOR (GERBANG UTAMA CHATBOT)
+// ============================================================================
+const chatWithGemini = async (req, res) => {
+    try {
+        const { message, uid, userName } = req.body;
+        if (!message || !uid) return res.status(400).json({ error: 'Data tidak lengkap' });
 
-            const userRef = db.collection('users').doc(uid);
+        const formatter = new Intl.DateTimeFormat('id-ID', {
+            timeZone: 'Asia/Makassar',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
 
-            const userSnap = await userRef.get();
-            const userData = userSnap.data() || {};
-            const gender = userData.gender || "";
+        let formattedNow = formatter.format(new Date());
+        formattedNow = formattedNow.replace(/\./g, ':');
 
-            let panggilan = "";
-            if (gender.toLowerCase() === "laki-laki") {
-                panggilan = "Bapak";
-            } else if (gender.toLowerCase() === "perempuan") {
-                panggilan = "Ibu";
-            }
+        const userRef = db.collection('users').doc(uid);
 
-            const finalName = userName || "Dosen";
-            const finalNameWithTitle = panggilan ? `${panggilan} ${finalName}` : finalName;
+        const userSnap = await userRef.get();
+        const userData = userSnap.data() || {};
+        const gender = userData.gender || "";
 
-            const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
-                userRef.collection('teaching_schedules').get(),
-                userRef.collection('events').get(),
-                userRef.collection('tasks').get(),
-                userRef.collection('consultations').get()
-            ]);
+        let panggilan = "";
+        if (gender.toLowerCase() === "laki-laki") {
+            panggilan = "Bapak";
+        } else if (gender.toLowerCase() === "perempuan") {
+            panggilan = "Ibu";
+        }
 
-            const contextData = `
+        const finalName = userName || "Dosen";
+        const finalNameWithTitle = panggilan ? `${panggilan} ${finalName}` : finalName;
+
+        const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
+            userRef.collection('teaching_schedules').get(),
+            userRef.collection('events').get(),
+            userRef.collection('tasks').get(),
+            userRef.collection('consultations').get()
+        ]);
+
+        const contextData = `
         A. JADWAL MENGAJAR:\n${formatTeaching(teachingSnap)}
         B. EVENT / ACARA:\n${formatEvents(eventSnap)}
         C. TUGAS / TASKS:\n${formatTasks(taskSnap)}
         D. KONSULTASI:\n${formatConsultations(consultationSnap)}
         `;
 
-            const intentPrompt = `Pesan user: "${message}". Apakah tujuan utama user? 
+        const intentPrompt = `Pesan user: "${message}". Apakah tujuan utama user? 
         Pilih HANYA SATU KATA dari daftar berikut:
         - "CREATE" (jika ingin menambah/membuat jadwal baru)
         - "DELETE" (jika ingin menghapus/membatalkan jadwal)
@@ -418,59 +419,59 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
         - "OUT_OF_SCOPE" (jika bertanya hal di luar jadwal akademik, seperti matematika, coding, pengetahuan umum, cuaca, dll).
         Jawab HANYA DENGAN SATU KATA tersebut tanpa tambahan apapun!`;
 
-            const intentResult = await generateWithFallback(intentPrompt);
-            const intentText = (await intentResult.response).text().toUpperCase();
+        const intentResult = await generateWithFallback(intentPrompt);
+        const intentText = (await intentResult.response).text().toUpperCase();
 
-            console.log(`🤖 Intent Deteksi: ${intentText} | User: ${finalNameWithTitle}`);
+        console.log(`🤖 Intent Deteksi: ${intentText} | User: ${finalNameWithTitle}`);
 
-            if (intentText.includes('CREATE')) {
-                return await processCreateSchedule(res, userRef, message, formattedNow);
-            }
-            else if (intentText.includes('DELETE')) {
-                return await processDeleteSchedule(res, userRef, message, contextData);
-            }
-            else if (intentText.includes('OUT_OF_SCOPE') || intentText.includes('SCOPE')) {
-                return res.json({
-                    status: 'success',
-                    reply: `Maaf ${finalNameWithTitle}, saya adalah asisten yang dirancang khusus hanya untuk mengelola jadwal akademik Anda. Saya tidak dapat menjawab pertanyaan terkait hal tersebut. 🙏\n\nSilakan tanyakan seputar jadwal mengajar, acara, tugas, atau bimbingan Anda.\n\n🤖 *Lecturo Assistant*`
-                });
-            }
-            else {
-                return await processReadSchedule(res, message, finalNameWithTitle, formattedNow, contextData);
-            }
+        if (intentText.includes('CREATE')) {
+            return await processCreateSchedule(res, userRef, message, formattedNow);
+        }
+        else if (intentText.includes('DELETE')) {
+            return await processDeleteSchedule(res, userRef, message, contextData);
+        }
+        else if (intentText.includes('OUT_OF_SCOPE') || intentText.includes('SCOPE')) {
+            return res.json({
+                status: 'success',
+                reply: `Maaf ${finalNameWithTitle}, saya adalah asisten yang dirancang khusus hanya untuk mengelola jadwal akademik Anda. Saya tidak dapat menjawab pertanyaan terkait hal tersebut. 🙏\n\nSilakan tanyakan seputar jadwal mengajar, acara, tugas, atau bimbingan Anda.\n\n🤖 *Lecturo Assistant*`
+            });
+        }
+        else {
+            return await processReadSchedule(res, message, finalNameWithTitle, formattedNow, contextData);
+        }
 
-        } catch (error) {
-            console.error("Error Chat AI:", error.message);
+    } catch (error) {
+        console.error("Error Chat AI:", error.message);
 
-            const isBusy = error.status === 429 || error.status === 503 ||
-                error.message.includes('Quota') || error.message.includes('429') ||
-                error.message.includes('503');
+        const isBusy = error.status === 429 || error.status === 503 ||
+            error.message.includes('Quota') || error.message.includes('429') ||
+            error.message.includes('503');
 
-            if (isBusy) {
-                const namaSapaan = typeof finalNameWithTitle !== 'undefined' ? finalNameWithTitle : "Bapak/Ibu";
-
-                return res.json({
-                    status: 'success',
-                    reply: `⚠️ *Sistem Sedang Sibuk*\n\nMaaf ${namaSapaan}, layanan AI sedang menangani banyak permintaan. Mohon tunggu sekitar 1 menit lalu coba kirimkan pesan Anda lagi. 🙏\n\n🤖 *Lecturo System*`
-                });
-            }
+        if (isBusy) {
+            const namaSapaan = typeof finalNameWithTitle !== 'undefined' ? finalNameWithTitle : "Bapak/Ibu";
 
             return res.json({
                 status: 'success',
-                reply: "⚠️ *Terjadi Kesalahan*\n\nMaaf, saya gagal memproses permintaan Anda saat ini."
+                reply: `⚠️ *Sistem Sedang Sibuk*\n\nMaaf ${namaSapaan}, layanan AI sedang menangani banyak permintaan. Mohon tunggu sekitar 1 menit lalu coba kirimkan pesan Anda lagi. 🙏\n\n🤖 *Lecturo System*`
             });
         }
-    };
 
-    // ============================================================================
-    // FUNGSI OCR (EKSTRAKSI EVENT DARI GAMBAR/PDF)
-    // ============================================================================
-    const extractEvent = async (req, res) => {
-        try {
-            const { text } = req.body;
-            if (!text) return res.status(400).json({ error: 'Teks input kosong' });
+        return res.json({
+            status: 'success',
+            reply: "⚠️ *Terjadi Kesalahan*\n\nMaaf, saya gagal memproses permintaan Anda saat ini."
+        });
+    }
+};
 
-            const prompt = `
+// ============================================================================
+// FUNGSI OCR (EKSTRAKSI EVENT DARI GAMBAR/PDF)
+// ============================================================================
+const extractEvent = async (req, res) => {
+    try {
+        const { text } = req.body;
+        if (!text) return res.status(400).json({ error: 'Teks input kosong' });
+
+        const prompt = `
         Analisis teks berikut untuk jadwal acara/akademik. Ekstrak ke format JSON murni:
         - "title": Judul acara.
         - "category": "Rapat, Seminar, Webinar, Workshop, Penelitian, atau Lainnya".
@@ -488,17 +489,17 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
         Teks: "${text}"
         `;
 
-            const result = await generateWithFallback(prompt);
-            const response = await result.response;
-            let cleanJson = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+        const result = await generateWithFallback(prompt);
+        const response = await result.response;
+        let cleanJson = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
 
-            const eventData = JSON.parse(cleanJson);
-            res.json({ status: 'success', data: eventData });
+        const eventData = JSON.parse(cleanJson);
+        res.json({ status: 'success', data: eventData });
 
-        } catch (error) {
-            console.error("Error Extract Event:", error);
-            res.status(500).json({ status: 'error', message: 'Gagal mengekstrak event.', error_details: error.message });
-        }
-    };
+    } catch (error) {
+        console.error("Error Extract Event:", error);
+        res.status(500).json({ status: 'error', message: 'Gagal mengekstrak event.', error_details: error.message });
+    }
+};
 
-    module.exports = { chatWithGemini, extractEvent };
+module.exports = { chatWithGemini, extractEvent };
