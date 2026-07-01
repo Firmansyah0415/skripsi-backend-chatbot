@@ -154,31 +154,32 @@ const processReadSchedule = async (res, message, finalName, formattedNow, contex
 
         ${contextData}
 
-        ATURAN FORMATTING:
-        1. Gunakan Header Kategori (Hanya jika ada datanya):
-           - Tugas = 📝 **DAFTAR TUGAS**
-           - Event = 🗓️ **ACARA / AGENDA**
-           - Mengajar = 👨‍🏫 **JADWAL MENGAJAR**
-           - Konsultasi = 🎓 **JADWAL SESI BIMBINGAN**
-        
-        2. Format Tampilan Per Item (Jangan tampilkan ID_DB, sembunyikan ID_DB dari user):
-           - Judul harus di-Bold (*Judul*).
-           - Baris Metadata: 🔴/🟡/🟢 [Prioritas] | [Status Emoticon] [Status Teks]
-           - Baris Waktu: 📅 [Tanggal] ⏰ [Jam Mulai] - [Jam Selesai]
-           - Baris Lokasi (Jika ada): 📍 [Lokasi]
+        ATURAN KATEGORI (SANGAT PENTING & WAJIB DIIKUTI):
+        1. DILARANG KERAS memindahkan kategori jadwal atau menebak-nebak kategori berdasarkan nama judulnya!
+        2. Semua jadwal yang ada di bawah "A. JADWAL MENGAJAR" WAJIB ditampilkan di bawah header 👨‍🏫 *JADWAL MENGAJAR*
+        3. Semua jadwal yang ada di bawah "B. EVENT / ACARA" WAJIB ditampilkan di bawah header 🗓️ *ACARA / AGENDA*
+        4. Semua jadwal yang ada di bawah "C. TUGAS / TASKS" WAJIB ditampilkan di bawah header 📝 *DAFTAR TUGAS* (PENTING: Walaupun judul tugasnya ada kata "Matkul", "Dosen", atau "Ajar", TETAP biarkan di bawah header Daftar Tugas!)
+        5. Semua jadwal yang ada di bawah "D. KONSULTASI" WAJIB ditampilkan di bawah header 🎓 *JADWAL SESI BIMBINGAN*
+        6. Jika suatu bagian di DATA KONTEKS tertulis "(Tidak ada...)", jangan buat/tampilkan header tersebut.
+
+        ATURAN FORMATTING TAMPILAN:
+        - Gunakan HANYA 1 (satu) tanda bintang untuk menebalkan judul agar sesuai format WhatsApp. Contoh: *Judul Jadwal*
+        - Baris Metadata: 🔴/🟡/🟢 [Prioritas] | [Status Emoticon] [Status Teks]
+        - Baris Waktu: 📅 [Tanggal] ⏰ [Jam Mulai] - [Jam Selesai]
+        - Baris Lokasi (Jika ada): 📍 [Lokasi]
 
         ATURAN LOGIKA STATUS & EMOTIKON (PENTING):
-        Cek field 'IsCompleted' (Atau 'Status' untuk Konsultasi) dan Bandingkan Waktu Jadwal dengan 'Waktu Saat Ini':
-        - Jika IsCompleted = true ATAU Status = COMPLETED -> ✅ [Selesai].
-        - Jika IsCompleted = false ATAU Status = SCHEDULED -> ⏳ [Upcoming] (Jika jadwal belum lewat) ATAU ⛔ [Terlewat] (Jika waktu sudah kadaluarsa).
+        Cek nilai 'Selesai', 'IsCompleted' atau 'Status' pada DATA KONTEKS:
+        - Jika "true" atau "COMPLETED" -> ✅ Selesai
+        - Jika "false" atau "SCHEDULED" -> ⏳ Upcoming (jika waktu belum lewat) ATAU ⛔ Terlewat (jika waktu jadwal sudah lebih lama dari Waktu Saat Ini).
 
-        ATURAN PRIORITAS (WAJIB IKUTI WARNA INI SAJA):
-        - Jika prioritas bertuliskan "Tinggi" atau "High" -> Gunakan 🔴 Tinggi
-        - Jika prioritas bertuliskan "Sedang", "Medium", ATAU KOSONG -> Gunakan 🟡 Sedang
-        - Jika prioritas bertuliskan "Rendah" atau "Low" -> Gunakan 🟢 Rendah
+        ATURAN PRIORITAS (WAJIB IKUTI WARNA INI):
+        - Prioritas Tinggi/High -> 🔴 Tinggi
+        - Prioritas Sedang/Medium -> 🟡 Sedang
+        - Prioritas Rendah/Low -> 🟢 Rendah
 
         CONTOH FORMAT OUTPUT:
-        🎓 **JADWAL BIMBINGAN**
+        🎓 *JADWAL BIMBINGAN*
         1. *Bimbingan Skripsi & KP*
            🟡 Sedang | ⏳ Upcoming
            📅 20/02/2026 ⏰ 09:00 - 12:00
@@ -186,6 +187,7 @@ const processReadSchedule = async (res, message, finalName, formattedNow, contex
 
         INSTRUKSI RESPON:
         - Jawab pertanyaan user: "${message}" secara sopan, ringkas dan to the point.
+        - Gunakan format WhatsApp Markdown yang rapi.
         - Jika user bertanya jadwal, tampilkan list sesuai format compact di atas.
         - Jika user hanya menyapa, balas sapaannya dengan menyebut nama user, lalu tawarkan bantuan.
         - WAJIB TOLAK DENGAN SOPAN jika user menanyakan hal di luar konteks jadwal.
