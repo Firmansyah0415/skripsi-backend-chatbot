@@ -8,7 +8,7 @@ const bodyParser = require('body-parser');
 require('dotenv').config();
 
 // Import Routes
-const authRoutes = require('./routes/authRoutes'); // <--- Tambah ini
+const authRoutes = require('./routes/authRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const userRoutes = require('./routes/userRoutes');
 const teachingRoutes = require('./routes/teachingRoutes');

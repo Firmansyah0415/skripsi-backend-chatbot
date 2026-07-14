@@ -466,27 +466,31 @@ const chatWithGemini = async (req, res) => {
 };
 
 // ============================================================================
-// FUNGSI OCR (EKSTRAKSI EVENT DARI GAMBAR/PDF)
+// FUNGSI OCR (EKSTRAKSI EVENT DARI GAMBAR/PDF) - BULLETPROOF UPDATE
 // ============================================================================
 const extractEvent = async (req, res) => {
     try {
         const { text } = req.body;
         if (!text) return res.status(400).json({ error: 'Teks input kosong' });
 
+        // 1. PROMPT ENGINEERING YANG LEBIH TEGAS
         const prompt = `
         Analisis teks berikut untuk jadwal acara/akademik. Ekstrak ke format JSON murni:
         - "title": Judul acara.
         - "category": "Rapat, Seminar, Webinar, Workshop, Penelitian, atau Lainnya".
         - "date": format "DD/MM/YYYY".
-        - "time": Waktu mulai (format "HH:mm"). Jika teks memiliki rentang (contoh: "19.00 - 21.00"), maka ini adalah "19:00".
-        - "end_time": Waktu selesai (format "HH:mm"). Jika teks memiliki rentang (contoh: "19.00 - 21.00" atau "19:00 s.d 21:00"), AMBIL NILAI AKHIRNYA (berarti "21:00"). Jika benar-benar tidak ada indikasi waktu selesai, WAJIB isi dengan estimasi 1 jam setelah waktu mulai.
+        - "time": Waktu mulai (format "HH:mm"). Jika rentang "19.00 - 21.00", ambil "19:00".
+        - "end_time": Waktu selesai (format "HH:mm"). Jika "19.00 - 21.00", ambil "21:00". Jika tidak ada, wajib isi estimasi 1 jam setelah waktu mulai.
         - "location": Lokasi acara.
-        - "description": Ringkasan atau informasi tambahan.
+        - "description": Ringkasan acara.
 
         Aturan Ekstraksi: 
         1. Isi string kosong "" jika data tidak ada, jangan gunakan null.
-        2. Abaikan zona waktu seperti WITA/WIB, cukup ambil angkanya.
-        3. Hanya return JSON murni tanpa markdown \`\`\`json.
+        2. Abaikan zona waktu (WITA/WIB).
+        3. WAJIB kembalikan HANYA JSON Object tunggal dengan struktur persis seperti ini:
+        {
+          "title": "...", "category": "...", "date": "...", "time": "...", "end_time": "...", "location": "...", "description": "..."
+        }
 
         Teks: "${text}"
         `;
@@ -495,8 +499,21 @@ const extractEvent = async (req, res) => {
         const response = await result.response;
         let cleanJson = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
 
-        const eventData = JSON.parse(cleanJson);
-        res.json({ status: 'success', data: eventData });
+        // 2. LOGIKA TAMENG NORMALISASI (ANTI-CRASH)
+        let rawAiData = JSON.parse(cleanJson);
+        let finalEventData = {};
+
+        // Cek apakah AI membandel mengirim Array [ { ... } ]
+        if (Array.isArray(rawAiData)) {
+            finalEventData = rawAiData.length > 0 ? rawAiData[0] : {};
+        }
+        // Jika AI patuh mengirim Object { ... }
+        else if (typeof rawAiData === 'object' && rawAiData !== null) {
+            finalEventData = rawAiData;
+        }
+
+        // Kirim format baku ke Android
+        res.json({ status: 'success', data: finalEventData });
 
     } catch (error) {
         console.error("Error Extract Event:", error);
