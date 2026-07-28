@@ -32,15 +32,25 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 
-// 1. Eksekusi Helmet (Wajib ditaruh paling atas sebelum route & cors)
-app.use(helmet());
+// 1. Eksekusi Helmet (Kustomisasi CSP agar fungsi klik tombol di HTML statis tetap jalan)
+app.use(helmet({
+    contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+            "script-src": ["'self'", "'unsafe-inline'"], // Mengizinkan inline script (seperti onclick)
+            "script-src-attr": ["'self'", "'unsafe-inline'"],
+        },
+    },
+}));
 
-// 2. Konfigurasi CORS Khusus (Menghilangkan peringatan Cross-Domain Misconfiguration di ZAP)
+// 2. Konfigurasi CORS Khusus (Tambahkan domain resmi Lecturo ke daftar putih)
 const corsOptions = {
     origin: [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
-        'http://43.156.232.194:3000' // IP VPS Anda (Tambahkan domain .com/.id Anda di sini nanti jika ada)
+        'http://43.156.232.194:3000',
+        'https://lecturo.my.id',        // <--- WAJIB ADA: Akses utama
+        'https://www.lecturo.my.id'     // <--- WAJIB ADA: Akses alias
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     optionsSuccessStatus: 204
