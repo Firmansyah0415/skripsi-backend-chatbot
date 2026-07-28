@@ -3,6 +3,7 @@
 // ==========================================
 const express = require('express');
 const path = require('path');
+const helmet = require('helmet'); // pengaman dengan library helmet
 const cors = require('cors');
 const bodyParser = require('body-parser');
 require('dotenv').config();
@@ -30,8 +31,24 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors()); // Agar bisa diakses dari berbagai origin
+
+// 1. Eksekusi Helmet (Wajib ditaruh paling atas sebelum route & cors)
+app.use(helmet());
+
+// 2. Konfigurasi CORS Khusus (Menghilangkan peringatan Cross-Domain Misconfiguration di ZAP)
+const corsOptions = {
+    origin: [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://43.156.232.194:3000' // IP VPS Anda (Tambahkan domain .com/.id Anda di sini nanti jika ada)
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    optionsSuccessStatus: 204
+};
+app.use(cors(corsOptions));
+
 app.use(bodyParser.json()); // Agar bisa membaca format JSON
+
 // --- TAMBAHKAN BARIS INI UNTUK MENAMPILKAN WEB ---
 app.use(express.static(path.join(__dirname, 'public')));
 // -------------------------------------------------
