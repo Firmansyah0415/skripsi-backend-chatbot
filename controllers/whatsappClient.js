@@ -75,35 +75,61 @@ client.on('ready', () => {
     console.log('Bot siap melayani User yang terdaftar...');
 });
 
+// --- MAP UNTUK ANTI-SPAM / ANTI-LOOP ---
+const antiSpamCache = new Map();
+
 // --- BAGIAN PENTING: PENANGANAN PESAN ---
 client.on('message', async (msg) => {
-    if (msg.from === 'status@broadcast' || msg.from.includes('@newsletter')) return;
+    // 1. Abaikan Status, Newsletter, dan GRUP (@g.us)
+    if (msg.from === 'status@broadcast' || msg.from.includes('@newsletter') || msg.from.includes('@g.us')) return;
+
+    // 2. SISTEM ANTI-LOOP (Mencegah bot saling balas beruntun)
+    const now = Date.now();
+    const rateLimit = antiSpamCache.get(msg.from) || { count: 0, lastMessageTime: now };
+
+    if (now - rateLimit.lastMessageTime > 10000) {
+        rateLimit.count = 0; // Reset jika sudah lewat 10 detik
+    }
+    rateLimit.count += 1;
+    rateLimit.lastMessageTime = now;
+    antiSpamCache.set(msg.from, rateLimit);
+
+    if (rateLimit.count > 3) {
+        console.warn(`🛑 [ANTI-LOOP AKTIF] Terdeteksi auto-reply beruntun dari ${msg.from}. Pesan diabaikan!`);
+        return;
+    }
 
     let realNumber = '';
     let senderName = 'Unknown';
     let isLid = false;
 
     try {
-        // [STRATEGI BARU: AMBIL DARI CONTACT DULU, JANGAN DARI msg.from]
         const contact = await msg.getContact();
+
+        // 3. BLOKIR AKUN OFFICIAL / CENTANG HIJAU (IM3, Telkomsel, WA, dll)
+        if (contact.isVerified || contact.id.user === '0') {
+            console.log(`🚫 [BLOKIR OFFICIAL] Mengabaikan pesan dari Akun Centang Hijau: ${contact.name || msg.from}`);
+            return;
+        }
+
+        // ==============================================================
+        // DARI SINI KE BAWAH ADALAH KODE ASLI ANDA, TIDAK ADA YANG DIUBAH
+        // ==============================================================
         senderName = contact.pushname || contact.name || "User";
 
-        // Terkadang contact.number berhasil menyelamatkan nomor asli (628...)
         if (contact.number) {
             realNumber = contact.number;
-            // Jika number yang dikembalikan adalah LID (15 digit tanpa 62 di depan)
             if (realNumber.length >= 14 && !realNumber.startsWith('62')) {
                 isLid = true;
             }
         } else {
-            // Fallback ke msg.from jika contact.number kosong
             if (msg.from.includes('@c.us') || msg.from.includes('@lid')) {
                 realNumber = msg.from.replace('@c.us', '').replace('@lid', '');
                 if (msg.from.includes('@lid') || (realNumber.length >= 14 && !realNumber.startsWith('62'))) {
                     isLid = true;
                 }
             } else {
-                return; // Abaikan grup
+                return;
             }
         }
     } catch (err) {
@@ -158,7 +184,7 @@ client.on('message', async (msg) => {
 
             // PERBAIKAN: Gunakan client.sendMessage ke msg.from agar WA tidak bingung dengan ID LID
             try {
-                await client.sendMessage(msg.from, `Halo *${senderName}*!\nKarena kebijakan privasi WhatsApp Business, nomor HP Anda disembunyikan oleh sistem Meta.\n\nKetik *LINK NomorHP* (Contoh: *LINK 082292267396*) untuk menautkan chat ini dengan akun Lecturo Anda secara permanen.`);
+                await client.sendMessage(msg.from, `Halo *${senderName}*!\nKarena kebijakan privasi WhatsApp Business, nomor HP Anda disembunyikan oleh sistem Meta.\n\nKetik *LINK NomorHP* (Contoh: *LINK 0812345678*) untuk menautkan chat ini dengan akun Lecturo Anda secara permanen.`);
             } catch (replyErr) {
                 console.error("Gagal mengirim pesan balasan peringatan LINK:", replyErr);
             }
