@@ -66,8 +66,19 @@ client.on('loading_screen', (percent, message) => {
     console.log(`⏳ Memuat WhatsApp Web: ${percent}% - ${message}`);
 });
 
+// --- PERANGKAP SILENT RELOAD ---
+let authCount = 0; // Penghitung jumlah login
+
 client.on('authenticated', () => {
-    console.log('🔑 Sesi WhatsApp Ditemukan & Terautentikasi!');
+    authCount++;
+    console.log(`🔑 Sesi WhatsApp Ditemukan & Terautentikasi! (Hitungan: ${authCount})`);
+
+    // Jika log ini muncul lebih dari 1 kali (artinya browser nge-refresh sendiri)
+    if (authCount > 1) {
+        console.warn('⚠️ TERDETEKSI REFRESH HALAMAN (SILENT RELOAD) DARI WA WEB!');
+        console.warn('🔄 Membunuh proses yang tuli agar PM2 me-restart dari awal...');
+        process.exit(1); // Matikan paksa agar PM2 menyalakan ulang dengan otak yang segar
+    }
 });
 
 client.on('auth_failure', msg => {
