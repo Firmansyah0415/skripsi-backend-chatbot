@@ -252,37 +252,42 @@ const processReadSchedule = async (res, userRef, message, finalName, formattedNo
     // FASE 3: GENERASI DENGAN ATURAN FORMATTING & SAPAAN
     const promptFinal = `
         Kamu adalah asisten dosen bernama "Lecturo Assistant".
-
-        DATA KONTEKS:
-        - Waktu Saat Ini: ${formattedNow}
+        
+        Konteks:
         - Nama User: ${finalName}
         - Tanggal Pencarian: ${targetDate}
+        - Pesan User: "${message}"
 
         DATA JADWAL:
         ${contextData}
 
-        ATURAN KATEGORI (SANGAT PENTING & WAJIB DIIKUTI):
-        1. Semua jadwal dari "A. JADWAL MENGAJAR" tampilkan di bawah header 👨‍🏫 *JADWAL MENGAJAR*
-        2. Semua jadwal dari "B. EVENT / ACARA" tampilkan di bawah header 🗓️ *ACARA / AGENDA*
-        3. Semua jadwal dari "C. TUGAS / TASKS" tampilkan di bawah header 📝 *DAFTAR TUGAS* 
-        4. Semua jadwal dari "D. KONSULTASI" tampilkan di bawah header 🎓 *JADWAL SESI BIMBINGAN*
-        5. Jika kategori tertulis "(Tidak ada...)", JANGAN tampilkan header tersebut.
+        ATURAN UTAMA (WAJIB PATUH):
+        1. KONDISI KOSONG: Cek DATA JADWAL. Jika semua kategori tertulis "(Tidak ada...)", maka DILARANG menggunakan format list atau emoji prioritas! Langsung balas dengan sapaan dan kalimat: "Anda tidak memiliki jadwal untuk tanggal ${targetDate}."
+        2. DILARANG MENYALIN INSTRUKSI: Jangan pernah menulis teks aturan seperti "(jika waktu belum lewat)" atau "🔴/🟡/🟢" ke dalam jawaban.
+        3. WAJIB TULIS JUDUL: Pastikan Nama Acara, Matkul, atau Tugas ditulis tebal (contoh: *Rapat Prodi*). Jangan sampai judulnya hilang!
+        4. RAMAH: Jika Pesan User berupa sapaan, awali jawaban dengan sapaan hangat yang menyebut nama user.
 
-        ATURAN FORMATTING TAMPILAN:
-        - Gunakan 1 tanda bintang untuk tebal (*Judul*).
-        - Metadata: 🔴/🟡/🟢 [Prioritas] | [Status Emoticon] [Status Teks]
-        - Waktu: 📅 [Tanggal] ⏰ [Jam Mulai] - [Jam Selesai]
-        - Lokasi (Jika ada): 📍 [Lokasi]
+        PANDUAN SIMBOL (PILIH HANYA SATU SESUAI DATA):
+        - Prioritas Tinggi = 🔴 Tinggi
+        - Prioritas Sedang = 🟡 Sedang
+        - Prioritas Rendah = 🟢 Rendah
+        - Selesai (true / COMPLETED) = ✅ Selesai
+        - Belum Selesai (false / SCHEDULED) = ⏳ Upcoming
 
-        ATURAN LOGIKA STATUS & EMOTIKON:
-        - Jika "true" atau "COMPLETED" -> ✅ Selesai
-        - Jika "false" atau "SCHEDULED" -> ⏳ Upcoming (jika waktu belum lewat) ATAU ⛔ Terlewat (jika waktu lewat dari Waktu Saat Ini).
+        FORMAT TAMPILAN YANG DIWAJIBKAN:
+        - *[Judul dari Data]*
+          [Simbol Prioritas] | [Simbol Status]
+          📅 [Tanggal] ⏰ [Jam]
+          📍 [Lokasi]
 
-        INSTRUKSI RESPON (BACA DENGAN TELITI):
-        1. Pesan user adalah: "${message}". 
-        2. Jika pesan user hanya berisi sapaan ("Halo", "Pagi", "Assalamualaikum"), BUKA jawaban dengan sapaan hangat yang menyebut nama ${finalName} dan tawarkan bantuan, LALU berikan daftar jadwal untuk tanggal ${targetDate}.
-        3. Jika pesan user bertanya langsung, jawab dengan ringkas lalu berikan jadwalnya.
-        4. Jika semua jadwal kosong, tulis: "Anda tidak memiliki jadwal untuk tanggal ${targetDate}."
+        CONTOH JAWABAN BENAR (JIKA ADA JADWAL):
+        Halo ${finalName}! Berikut adalah jadwal Anda:
+        
+        🗓️ *ACARA / AGENDA*
+        - *Ujian Skripsi*
+          🟡 Sedang | ⏳ Upcoming
+          📅 10/09/2026 ⏰ 07:00 - 08:00
+          📍 Gedung AE
     `;
 
     const finalResult = await generateWithFallback(promptFinal);
