@@ -29,10 +29,19 @@ const client = new Client({
             '--disable-web-security',
             '--disable-audio-output',
             '--mute-audio',
-            '--disable-software-rasterizer',
-            '--js-flags=--max-old-space-size=256'
+            '--disable-software-rasterizer'
+            // CATATAN: '--js-flags=--max-old-space-size=256' DIHAPUS agar WhatsApp Web tidak tercekik saat load
         ],
     }
+});
+
+// --- TAMBAHKAN INDIKATOR INI DI BAWAH client.on('qr', ...) ---
+client.on('loading_screen', (percent, message) => {
+    console.log(`⏳ Memuat WhatsApp Web: ${percent}% - ${message}`);
+});
+
+client.on('authenticated', () => {
+    console.log('🔑 Sesi WhatsApp Ditemukan & Terautentikasi!');
 });
 
 // --- FUNGSI PENCARI UID ---
