@@ -18,9 +18,19 @@ const client = new Client({
         headless: true,
         executablePath: chromePath,
         args: [
-            '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-            '--no-zygote', '--disable-gpu', '--disable-extensions', '--no-first-run',
-            '--no-default-browser-check', '--disable-web-security'
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--no-zygote',
+            '--disable-gpu',
+            '--disable-extensions',
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--disable-web-security',
+            '--disable-audio-output',
+            '--mute-audio',
+            '--disable-software-rasterizer',
+            '--js-flags=--max-old-space-size=256'
         ],
     }
 });
@@ -75,6 +85,22 @@ client.on('ready', () => {
     console.log('Bot siap melayani User yang terdaftar...');
 });
 
+// --- FITUR AUTO-RECOVER (BANGKIT OTOMATIS JIKA KONEKSI PUTUS) ---
+client.on('disconnected', (reason) => {
+    console.log('🔴 Bot Terputus dari sistem WhatsApp! Alasan:', reason);
+    console.log('🔄 Mencoba menghubungkan ulang dalam 5 detik...');
+    try {
+        client.destroy();
+    } catch (e) { }
+    setTimeout(() => {
+        client.initialize();
+    }, 5000);
+});
+
+client.on('auth_failure', (msg) => {
+    console.error('❌ Gagal Autentikasi! Sesi korup:', msg);
+});
+
 // --- MAP UNTUK ANTI-SPAM / ANTI-LOOP ---
 const antiSpamCache = new Map();
 
@@ -83,19 +109,21 @@ client.on('message', async (msg) => {
     // 1. Abaikan Status, Newsletter, dan GRUP (@g.us)
     if (msg.from === 'status@broadcast' || msg.from.includes('@newsletter') || msg.from.includes('@g.us')) return;
 
-    // 2. SISTEM ANTI-LOOP (Mencegah bot saling balas beruntun)
+    // 2. SISTEM ANTI-LOOP (Ramah pengguna, tapi memblokir bot provider/loop)
     const now = Date.now();
-    const rateLimit = antiSpamCache.get(msg.from) || { count: 0, lastMessageTime: now };
+    const rateLimit = antiSpamCache.get(msg.from) || { count: 0, firstMessageTime: now };
 
-    if (now - rateLimit.lastMessageTime > 10000) {
-        rateLimit.count = 0; // Reset jika sudah lewat 10 detik
+    // Reset hanya jika sudah lewat 10 detik dari pesan PERTAMA
+    if (now - rateLimit.firstMessageTime > 10000) {
+        rateLimit.count = 0;
+        rateLimit.firstMessageTime = now;
     }
     rateLimit.count += 1;
-    rateLimit.lastMessageTime = now;
     antiSpamCache.set(msg.from, rateLimit);
 
-    if (rateLimit.count > 3) {
-        console.warn(`🛑 [ANTI-LOOP AKTIF] Terdeteksi auto-reply beruntun dari ${msg.from}. Pesan diabaikan!`);
+    // Toleransi 6 pesan per 10 detik
+    if (rateLimit.count > 6) {
+        console.warn(`🛑 [ANTI-SPAM AKTIF] Mengabaikan spam dari ${msg.from}`);
         return;
     }
 

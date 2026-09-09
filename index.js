@@ -3,7 +3,7 @@
 // ==========================================
 const express = require('express');
 const path = require('path');
-const helmet = require('helmet'); // pengaman dengan library helmet
+const helmet = require('helmet');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 require('dotenv').config();
@@ -99,3 +99,14 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`📱 Akses dari HP : Gunakan IP Laptop (Cek ipconfig)`);
     console.log(`========================================\n`);
 });
+
+const cleanup = async () => {
+    console.log('\n🛑 Mematikan server & Chromium secara bersih...');
+    try {
+        const { client } = require('./controllers/whatsappClient');
+        if (client) await client.destroy();
+    } catch (e) { }
+    process.exit(0);
+};
+process.on('SIGINT', cleanup);
+process.on('SIGTERM', cleanup);
