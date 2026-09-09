@@ -1,6 +1,7 @@
-const { client } = require('./whatsappClient'); // Import bot WA
+// UBAH BARIS PALING ATAS MENJADI SEPERTI INI:
+const { getClient } = require('./whatsappClient'); // Gunakan getClient untuk Baileys
 const admin = require('firebase-admin');
-const db = require('../config/firebaseConfig'); // <-- WAJIB IMPORT DATABASE
+const db = require('../config/firebaseConfig');
 
 const otpStore = new Map();
 
@@ -16,7 +17,7 @@ const formatPhoneNumber = (number) => {
     return formatted;
 };
 
-// 1. REQUEST OTP
+// 1. REQUEST OTP (UPDATE BAILEYS)
 const requestOtp = async (req, res) => {
     try {
         // Ambil penanda 'source' dari request (Hanya web yang mengirim ini)
@@ -52,23 +53,32 @@ const requestOtp = async (req, res) => {
         }
         // ==============================================================
 
-        // 2. Cek Kesiapan Bot
-        if (!client.info) {
+        // 2. Cek Kesiapan Bot (Baileys mengandalkan getClient())
+        const sock = getClient();
+        if (!sock) {
             return res.status(503).json({ status: 'error', message: 'Bot WhatsApp belum siap. Tunggu sebentar.' });
         }
 
-        // --- PERBAIKAN 2: VALIDASI NOMOR KE SERVER WA ---
-        const isRegistered = await client.getNumberId(formattedPhone);
+        // --- FORMAT ID BAILEYS ---
+        // WAJIB menggunakan format @s.whatsapp.net untuk nomor individual. 
+        // Ini mencegah crash yang disebabkan oleh penggunaan @lid pada versi wwebjs sebelumnya.
+        const chatId = `${formattedPhone}@s.whatsapp.net`;
 
-        if (!isRegistered) {
-            console.log(`❌ Nomor tidak terdaftar di WA: ${formattedPhone}`);
-            return res.status(400).json({
-                status: 'error',
-                message: 'Nomor ini tidak terdaftar di WhatsApp.'
-            });
+        // --- VALIDASI NOMOR (OPSIONAL TAPI AMAN DI BAILEYS) ---
+        // Baileys menggunakan onWhatsApp untuk mengecek apakah nomor terdaftar
+        try {
+            const [result] = await sock.onWhatsApp(chatId);
+            if (!result || !result.exists) {
+                console.log(`❌ Nomor tidak terdaftar di WA: ${formattedPhone}`);
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'Nomor ini tidak terdaftar di WhatsApp.'
+                });
+            }
+        } catch (checkErr) {
+            console.warn(`⚠️ Gagal memverifikasi status nomor, melanjutkan pengiriman OTP:`, checkErr.message);
         }
 
-        const chatId = isRegistered._serialized;
         const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
         otpStore.set(formattedPhone, {
@@ -79,7 +89,9 @@ const requestOtp = async (req, res) => {
         console.log(`🔐 OTP Generated: ${otpCode} -> ${chatId}`);
 
         const message = `*KODE VERIFIKASI LECTURO*\n\nKode OTP Anda adalah: *${otpCode}*\n\nJangan berikan kode ini kepada siapa pun.`;
-        await client.sendMessage(chatId, message);
+
+        // --- CARA KIRIM PESAN DI BAILEYS ---
+        await sock.sendMessage(chatId, { text: message });
 
         res.json({
             status: 'success',
