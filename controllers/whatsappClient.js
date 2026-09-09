@@ -39,7 +39,7 @@ async function startWhatsAppBot() {
     sock = makeWASocket({
         auth: state,
         printQRInTerminal: false, // Kita handle QR manual agar tampilannya rapi
-        logger: pino({ level: 'silent' }), // Matikan log bawaan Baileys yang terlalu ramai
+        logger: pino({ level: 'fatal' }), // Matikan log bawaan Baileys yang terlalu ramai
         browser: ['Lecturo Bot', 'Chrome', '1.0.0'], // Nama perangkat yang terlihat di WA HP
         syncFullHistory: false // Tidak perlu memuat riwayat lama agar cepat
     });

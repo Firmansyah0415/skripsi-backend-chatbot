@@ -202,10 +202,10 @@ const formatConsultations = (docs) => {
 // };
 
 // ============================================================================
-// 2. FUNGSI READ (ARSITEKTUR RAG TEXT-TO-QUERY SEJATI)
+// 2. FUNGSI READ (ARSITEKTUR RAG TEXT-TO-QUERY + TAMPILAN ESTETIK)
 // ============================================================================
 const processReadSchedule = async (res, userRef, message, finalName, formattedNow, todayStr, tomorrowStr) => {
-    // FASE 1: EKSTRAKSI NIAT (Biarkan AI mencari tahu TANGGAL berapa yang dicari user)
+    // FASE 1: EKSTRAKSI NIAT TANGGAL
     const queryPrompt = `
     Tanggal Hari Ini: ${todayStr}
     Tanggal Besok: ${tomorrowStr}
@@ -216,9 +216,9 @@ const processReadSchedule = async (res, userRef, message, finalName, formattedNo
     Wajib kembalikan HANYA JSON MURNI (tanpa markdown):
     {
         "is_specific_date": true,
-        "target_date": "DD/MM/YYYY" (Gunakan Tanggal Hari Ini, Tanggal Besok, atau ekstrak dari pesan)
+        "target_date": "DD/MM/YYYY"
     }
-    Jika user hanya bilang "jadwal saya" tanpa waktu, gunakan Tanggal Hari Ini.
+    Jika user hanya bilang "jadwal saya" atau hanya menyapa (contoh: "Halo", "Pagi"), gunakan Tanggal Hari Ini.
     `;
 
     const queryResult = await generateWithFallback(queryPrompt);
@@ -234,7 +234,7 @@ const processReadSchedule = async (res, userRef, message, finalName, formattedNo
 
     console.log(`🔍 [PENCARIAN DB] Mengambil jadwal khusus tanggal: ${targetDate}`);
 
-    // FASE 2: RETRIEVAL (Biarkan Firestore yang bekerja menyortir data, BUKAN AI)
+    // FASE 2: RETRIEVAL (Bebas Halusinasi, murni dari Database)
     const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
         userRef.collection('teaching_schedules').where('date', '==', targetDate).get(),
         userRef.collection('events').where('date', '==', targetDate).get(),
@@ -249,19 +249,40 @@ const processReadSchedule = async (res, userRef, message, finalName, formattedNo
     D. KONSULTASI:\n${formatConsultations(consultationSnap)}
     `;
 
-    // FASE 3: GENERASI (AI hanya merapikan data yang sudah pasti 100% benar)
+    // FASE 3: GENERASI DENGAN ATURAN FORMATTING & SAPAAN
     const promptFinal = `
-    Kamu adalah "Lecturo Assistant".
-    Data di bawah ini adalah JADWAL RESMI milik ${finalName} untuk tanggal: ${targetDate}.
+        Kamu adalah asisten dosen bernama "Lecturo Assistant".
 
-    DATA JADWAL:
-    ${contextData}
+        DATA KONTEKS:
+        - Waktu Saat Ini: ${formattedNow}
+        - Nama User: ${finalName}
+        - Tanggal Pencarian: ${targetDate}
 
-    Tugas:
-    1. Buat pesan balasan WhatsApp menggunakan Markdown (*tebal*).
-    2. Jika suatu kategori tertulis "(Tidak ada...)", sembunyikan kategori tersebut! Jangan ditampilkan sama sekali.
-    3. Jika semua jadwal kosong, balas dengan sopan: "Halo ${finalName}, Anda tidak memiliki jadwal untuk tanggal ${targetDate}."
-    4. DILARANG mengarang nama jadwal, merubah jam, atau memindahkan kategori. Cukup percantik tampilannya saja!
+        DATA JADWAL:
+        ${contextData}
+
+        ATURAN KATEGORI (SANGAT PENTING & WAJIB DIIKUTI):
+        1. Semua jadwal dari "A. JADWAL MENGAJAR" tampilkan di bawah header 👨‍🏫 *JADWAL MENGAJAR*
+        2. Semua jadwal dari "B. EVENT / ACARA" tampilkan di bawah header 🗓️ *ACARA / AGENDA*
+        3. Semua jadwal dari "C. TUGAS / TASKS" tampilkan di bawah header 📝 *DAFTAR TUGAS* 
+        4. Semua jadwal dari "D. KONSULTASI" tampilkan di bawah header 🎓 *JADWAL SESI BIMBINGAN*
+        5. Jika kategori tertulis "(Tidak ada...)", JANGAN tampilkan header tersebut.
+
+        ATURAN FORMATTING TAMPILAN:
+        - Gunakan 1 tanda bintang untuk tebal (*Judul*).
+        - Metadata: 🔴/🟡/🟢 [Prioritas] | [Status Emoticon] [Status Teks]
+        - Waktu: 📅 [Tanggal] ⏰ [Jam Mulai] - [Jam Selesai]
+        - Lokasi (Jika ada): 📍 [Lokasi]
+
+        ATURAN LOGIKA STATUS & EMOTIKON:
+        - Jika "true" atau "COMPLETED" -> ✅ Selesai
+        - Jika "false" atau "SCHEDULED" -> ⏳ Upcoming (jika waktu belum lewat) ATAU ⛔ Terlewat (jika waktu lewat dari Waktu Saat Ini).
+
+        INSTRUKSI RESPON (BACA DENGAN TELITI):
+        1. Pesan user adalah: "${message}". 
+        2. Jika pesan user hanya berisi sapaan ("Halo", "Pagi", "Assalamualaikum"), BUKA jawaban dengan sapaan hangat yang menyebut nama ${finalName} dan tawarkan bantuan, LALU berikan daftar jadwal untuk tanggal ${targetDate}.
+        3. Jika pesan user bertanya langsung, jawab dengan ringkas lalu berikan jadwalnya.
+        4. Jika semua jadwal kosong, tulis: "Anda tidak memiliki jadwal untuk tanggal ${targetDate}."
     `;
 
     const finalResult = await generateWithFallback(promptFinal);
@@ -617,9 +638,14 @@ const chatWithGemini = async (req, res) => {
         const finalName = userName || "Dosen";
         const finalNameWithTitle = panggilan ? `${panggilan} ${finalName}` : finalName;
 
-        // FASE 0: ROUTING INTENT (TIDAK ADA LAGI FETCH SEMUA DATA DI SINI)
+        // FASE 0: ROUTING INTENT DENGAN INSTRUKSI LEBIH CERDAS
         const intentPrompt = `Pesan user: "${message}". Tujuan utama user? 
-        Pilih HANYA SATU KATA: CREATE, DELETE, READ, atau OUT_OF_SCOPE. Jawab tanpa tambahan apapun!`;
+        Pilih HANYA SATU KATA dari daftar berikut:
+        - CREATE : jika ingin menambah/membuat jadwal baru.
+        - DELETE : jika ingin menghapus/membatalkan jadwal.
+        - READ : jika menanyakan jadwal, atau sekadar menyapa/salam (contoh: "halo", "selamat pagi", "p", "assalamualaikum").
+        - OUT_OF_SCOPE : jika bertanya hal di luar jadwal akademik (contoh: cuaca, matematika, coding, resep masakan).
+        Jawab HANYA DENGAN SATU KATA tersebut tanpa tambahan apapun!`;
 
         const intentResult = await generateWithFallback(intentPrompt);
         const intentText = (await intentResult.response).text().toUpperCase();
