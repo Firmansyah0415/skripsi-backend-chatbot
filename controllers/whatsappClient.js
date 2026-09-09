@@ -29,8 +29,9 @@ const client = new Client({
             '--disable-web-security',
             '--disable-audio-output',
             '--mute-audio',
-            '--disable-software-rasterizer'
-            // CATATAN: '--js-flags=--max-old-space-size=256' DIHAPUS agar WhatsApp Web tidak tercekik saat load
+            '--disable-software-rasterizer',
+            '--disable-features=site-per-process',
+            '--single-process'
         ],
     }
 });
@@ -96,14 +97,9 @@ client.on('ready', () => {
 
 // --- FITUR AUTO-RECOVER (BANGKIT OTOMATIS JIKA KONEKSI PUTUS) ---
 client.on('disconnected', (reason) => {
-    console.log('🔴 Bot Terputus dari sistem WhatsApp! Alasan:', reason);
-    console.log('🔄 Mencoba menghubungkan ulang dalam 5 detik...');
-    try {
-        client.destroy();
-    } catch (e) { }
-    setTimeout(() => {
-        client.initialize();
-    }, 5000);
+    console.log('🔴 Bot Terputus dari WhatsApp! Alasan:', reason);
+    console.log('🔄 Meminta PM2 me-restart proses secara bersih...');
+    process.exit(1);
 });
 
 client.on('auth_failure', (msg) => {
