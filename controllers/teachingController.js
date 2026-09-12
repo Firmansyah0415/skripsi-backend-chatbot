@@ -1,4 +1,3 @@
-// controllers/teachingController.js
 const db = require('../config/firebaseConfig');
 
 // 1. Simpan atau Update Jadwal (Sync)
@@ -7,7 +6,7 @@ const syncTeaching = async (req, res) => {
         const {
             user_id,
             uid,
-            id,          // <--- PERBAIKAN: JANGAN LUPA TAMBAHKAN INI
+            id,
             schedule_id,
             ...teachingData
         } = req.body;

@@ -1,5 +1,4 @@
-// UBAH BARIS PALING ATAS MENJADI SEPERTI INI:
-const { getClient } = require('./whatsappClient'); // Gunakan getClient untuk Baileys
+const { getClient } = require('./whatsappClient');
 const admin = require('firebase-admin');
 const db = require('../config/firebaseConfig');
 

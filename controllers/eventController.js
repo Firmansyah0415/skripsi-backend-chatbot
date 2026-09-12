@@ -67,24 +67,6 @@ const getAllEvents = async (req, res) => {
     }
 };
 
-
-// const getAllEvents = async (req, res) => {
-//     try {
-//         const { uid } = req.params;
-//         const snapshot = await db.collection('users').doc(uid).collection('events').get();
-//         const events = [];
-//         snapshot.forEach(doc => {
-//             events.push({
-//                 firestoreId: doc.id, // PENTING: ID Cloud
-//                 ...doc.data()
-//             });
-//         });
-//         res.json({ status: 'success', data: events });
-//     } catch (error) {
-//         res.status(500).json({ error: 'Gagal ambil data' });
-//     }
-// };
-
 // 3. Delete Event
 const deleteEvent = async (req, res) => {
     try {

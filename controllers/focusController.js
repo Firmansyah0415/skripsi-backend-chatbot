@@ -5,9 +5,9 @@ const syncSession = async (req, res) => {
     try {
         const {
             uid, user_id,
-            session_id, id,        // ID Sesi (bisa dari Android local ID atau kosong)
-            task_id,               // ID Tugas di Firestore (taskFirestoreId)
-            ...sessionData         // start_time, end_time, duration, status
+            session_id, id,
+            task_id,
+            ...sessionData
         } = req.body;
 
         const finalUid = user_id || uid;
