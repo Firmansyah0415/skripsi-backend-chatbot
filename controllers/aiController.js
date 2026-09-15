@@ -142,157 +142,215 @@ const formatConsultations = (docs) => {
 };
 
 // // ============================================================================
-// // 2. FUNGSI READ (MEMBACA JADWAL)
+// // 2. FUNGSI READ (ARSITEKTUR RAG TEXT-TO-QUERY + TAMPILAN ESTETIK)
 // // ============================================================================
-// const processReadSchedule = async (res, message, finalName, formattedNow, contextData) => {
-//     const prompt = `
-//         Kamu adalah asisten dosen bernama "Lecturo Assistant".
+// const processReadSchedule = async (res, userRef, message, finalName, formattedNow, todayStr, tomorrowStr) => {
+//     // FASE 1: EKSTRAKSI NIAT TANGGAL
+//     const queryPrompt = `
+//     Tanggal Hari Ini: ${todayStr}
+//     Tanggal Besok: ${tomorrowStr}
 
-//         DATA KONTEKS:
-//         - Waktu Saat Ini: ${formattedNow}
-//         - Nama User: ${finalName}
+//     Pesan user: "${message}"
 
-//         ${contextData}
-
-//         ATURAN KATEGORI (SANGAT PENTING & WAJIB DIIKUTI):
-//         1. DILARANG KERAS memindahkan kategori jadwal atau menebak-nebak kategori berdasarkan nama judulnya!
-//         2. Semua jadwal yang ada di bawah "A. JADWAL MENGAJAR" WAJIB ditampilkan di bawah header 👨‍🏫 *JADWAL MENGAJAR*
-//         3. Semua jadwal yang ada di bawah "B. EVENT / ACARA" WAJIB ditampilkan di bawah header 🗓️ *ACARA / AGENDA*
-//         4. Semua jadwal yang ada di bawah "C. TUGAS / TASKS" WAJIB ditampilkan di bawah header 📝 *DAFTAR TUGAS* (PENTING: Walaupun judul tugasnya ada kata "Matkul", "Dosen", atau "Ajar", TETAP biarkan di bawah header Daftar Tugas!)
-//         5. Semua jadwal yang ada di bawah "D. KONSULTASI" WAJIB ditampilkan di bawah header 🎓 *JADWAL SESI BIMBINGAN*
-//         6. Jika suatu bagian di DATA KONTEKS tertulis "(Tidak ada...)", jangan buat/tampilkan header tersebut.
-
-//         ATURAN FORMATTING TAMPILAN:
-//         - Gunakan HANYA 1 (satu) tanda bintang untuk menebalkan judul agar sesuai format WhatsApp. Contoh: *Judul Jadwal*
-//         - Baris Metadata: 🔴/🟡/🟢 [Prioritas] | [Status Emoticon] [Status Teks]
-//         - Baris Waktu: 📅 [Tanggal] ⏰ [Jam Mulai] - [Jam Selesai]
-//         - Baris Lokasi (Jika ada): 📍 [Lokasi]
-
-//         ATURAN LOGIKA STATUS & EMOTIKON (PENTING):
-//         Cek nilai 'Selesai', 'IsCompleted' atau 'Status' pada DATA KONTEKS:
-//         - Jika "true" atau "COMPLETED" -> ✅ Selesai
-//         - Jika "false" atau "SCHEDULED" -> ⏳ Upcoming (jika waktu belum lewat) ATAU ⛔ Terlewat (jika waktu jadwal sudah lebih lama dari Waktu Saat Ini).
-
-//         ATURAN PRIORITAS (WAJIB IKUTI WARNA INI):
-//         - Prioritas Tinggi/High -> 🔴 Tinggi
-//         - Prioritas Sedang/Medium -> 🟡 Sedang
-//         - Prioritas Rendah/Low -> 🟢 Rendah
-
-//         CONTOH FORMAT OUTPUT:
-//         🎓 *JADWAL BIMBINGAN*
-//         1. *Bimbingan Skripsi & KP*
-//            🟡 Sedang | ⏳ Upcoming
-//            📅 20/02/2026 ⏰ 09:00 - 12:00
-//            📍 Lab RPL
-
-//         INSTRUKSI RESPON:
-//         - Jawab pertanyaan user: "${message}" secara sopan, ringkas dan to the point.
-//         - Gunakan format WhatsApp Markdown yang rapi.
-//         - Jika user bertanya jadwal, tampilkan list sesuai format compact di atas.
-//         - Jika user hanya menyapa, balas sapaannya dengan menyebut nama user, lalu tawarkan bantuan.
-//         - WAJIB TOLAK DENGAN SOPAN jika user menanyakan hal di luar konteks jadwal.
+//     Tugas: Tentukan tanggal berapa jadwal yang ingin dilihat user berdasarkan pesan di atas.
+//     Wajib kembalikan HANYA JSON MURNI (tanpa markdown):
+//     {
+//         "is_specific_date": true,
+//         "target_date": "DD/MM/YYYY"
+//     }
+//     Jika user hanya bilang "jadwal saya" atau hanya menyapa (contoh: "Halo", "Pagi"), gunakan Tanggal Hari Ini.
 //     `;
 
-//     const result = await generateWithFallback(prompt);
-//     const response = await result.response;
-//     const textReply = response.text();
-//     const brandedReply = `${textReply}\n\n🤖 *Lecturo Assistant*`;
+//     const queryResult = await generateWithFallback(queryPrompt);
+//     let cleanJson = (await queryResult.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
 
-//     return res.json({ status: 'success', reply: brandedReply });
+//     let targetDate = todayStr; // Fallback ke hari ini
+//     try {
+//         const aiQuery = JSON.parse(cleanJson);
+//         if (aiQuery.target_date) targetDate = aiQuery.target_date;
+//     } catch (e) {
+//         console.warn("⚠️ Gagal parse intent tanggal dari AI, fallback ke hari ini:", e.message);
+//     }
+
+//     console.log(`🔍 [PENCARIAN DB] Mengambil jadwal khusus tanggal: ${targetDate}`);
+
+//     // FASE 2: RETRIEVAL (Bebas Halusinasi, murni dari Database)
+//     const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
+//         userRef.collection('teaching_schedules').where('date', '==', targetDate).get(),
+//         userRef.collection('events').where('date', '==', targetDate).get(),
+//         userRef.collection('tasks').where('date', '==', targetDate).get(),
+//         userRef.collection('consultations').where('date', '==', targetDate).get()
+//     ]);
+
+//     const contextData = `
+//     A. JADWAL MENGAJAR:\n${formatTeaching(teachingSnap)}
+//     B. EVENT / ACARA:\n${formatEvents(eventSnap)}
+//     C. TUGAS / TASKS:\n${formatTasks(taskSnap)}
+//     D. KONSULTASI:\n${formatConsultations(consultationSnap)}
+//     `;
+
+//     // FASE 3: GENERASI DENGAN ATURAN FORMATTING & SAPAAN
+//     const promptFinal = `
+//         Kamu adalah asisten dosen bernama "Lecturo Assistant".
+
+//         Konteks:
+//         - Nama User: ${finalName}
+//         - Tanggal Pencarian: ${targetDate}
+//         - Pesan User: "${message}"
+
+//         DATA JADWAL:
+//         ${contextData}
+
+//         ATURAN UTAMA (WAJIB PATUH):
+//         1. KONDISI KOSONG: Cek DATA JADWAL. Jika semua kategori tertulis "(Tidak ada...)", maka DILARANG menggunakan format list atau emoji prioritas! Langsung balas dengan sapaan dan kalimat: "Anda tidak memiliki jadwal untuk tanggal ${targetDate}."
+//         2. DILARANG MENYALIN INSTRUKSI: Jangan pernah menulis teks aturan seperti "(jika waktu belum lewat)" atau "🔴/🟡/🟢" ke dalam jawaban.
+//         3. WAJIB TULIS JUDUL: Pastikan Nama Acara, Matkul, atau Tugas ditulis tebal (contoh: *Rapat Prodi*). Jangan sampai judulnya hilang!
+//         4. RAMAH: Jika Pesan User berupa sapaan, awali jawaban dengan sapaan hangat yang menyebut nama user.
+
+//         PANDUAN SIMBOL (PILIH HANYA SATU SESUAI DATA):
+//         - Prioritas Tinggi = 🔴 Tinggi
+//         - Prioritas Sedang = 🟡 Sedang
+//         - Prioritas Rendah = 🟢 Rendah
+//         - Selesai (true / COMPLETED) = ✅ Selesai
+//         - Belum Selesai (false / SCHEDULED) = ⏳ Upcoming
+
+//         FORMAT TAMPILAN YANG DIWAJIBKAN:
+//         - *[Judul dari Data]*
+//           [Simbol Prioritas] | [Simbol Status]
+//           📅 [Tanggal] ⏰ [Jam]
+//           📍 [Lokasi]
+
+//         CONTOH JAWABAN BENAR (JIKA ADA JADWAL):
+//         Halo ${finalName}! Berikut adalah jadwal Anda:
+
+//         🗓️ *ACARA / AGENDA*
+//         - *Ujian Skripsi*
+//           🟡 Sedang | ⏳ Upcoming
+//           📅 10/09/2026 ⏰ 07:00 - 08:00
+//           📍 Gedung AE
+//     `;
+
+//     const finalResult = await generateWithFallback(promptFinal);
+//     const textReply = (await finalResult.response).text();
+//     return res.json({ status: 'success', reply: `${textReply}\n\n🤖 *Lecturo Assistant*` });
 // };
 
 // ============================================================================
-// 2. FUNGSI READ (ARSITEKTUR RAG TEXT-TO-QUERY + TAMPILAN ESTETIK)
+// 2. FUNGSI READ (ARSITEKTUR RAG: AI EKSTRAK TANGGAL + JS TEMPLATE STRING)
 // ============================================================================
 const processReadSchedule = async (res, userRef, message, finalName, formattedNow, todayStr, tomorrowStr) => {
-    // FASE 1: EKSTRAKSI NIAT TANGGAL
+    // FASE 1: EKSTRAKSI TANGGAL OLEH AI (Hanya 1x Panggilan AI)
     const queryPrompt = `
     Tanggal Hari Ini: ${todayStr}
     Tanggal Besok: ${tomorrowStr}
 
     Pesan user: "${message}"
 
-    Tugas: Tentukan tanggal berapa jadwal yang ingin dilihat user berdasarkan pesan di atas.
-    Wajib kembalikan HANYA JSON MURNI (tanpa markdown):
+    Tugas: Tentukan tanggal jadwal yang dicari user. Kembalikan HANYA JSON:
     {
-        "is_specific_date": true,
         "target_date": "DD/MM/YYYY"
     }
-    Jika user hanya bilang "jadwal saya" atau hanya menyapa (contoh: "Halo", "Pagi"), gunakan Tanggal Hari Ini.
+    Jika user hanya menyapa atau tidak menyebut waktu, gunakan Tanggal Hari Ini.
     `;
 
-    const queryResult = await generateWithFallback(queryPrompt);
-    let cleanJson = (await queryResult.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
-
-    let targetDate = todayStr; // Fallback ke hari ini
+    let targetDate = todayStr;
     try {
+        const queryResult = await generateWithFallback(queryPrompt);
+        let cleanJson = (await queryResult.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
         const aiQuery = JSON.parse(cleanJson);
         if (aiQuery.target_date) targetDate = aiQuery.target_date;
     } catch (e) {
-        console.warn("⚠️ Gagal parse intent tanggal dari AI, fallback ke hari ini:", e.message);
+        console.warn("⚠️ Fallback ke tanggal hari ini:", e.message);
     }
 
-    console.log(`🔍 [PENCARIAN DB] Mengambil jadwal khusus tanggal: ${targetDate}`);
+    console.log(`🔍 [PENCARIAN DB] Mengambil jadwal tanggal: ${targetDate}`);
 
-    // FASE 2: RETRIEVAL (Bebas Halusinasi, murni dari Database)
-    const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
+    // FASE 2: QUERY FIRESTORE
+    const [teachingSnap, eventSnap, taskSnap, consultSnap] = await Promise.all([
         userRef.collection('teaching_schedules').where('date', '==', targetDate).get(),
         userRef.collection('events').where('date', '==', targetDate).get(),
         userRef.collection('tasks').where('date', '==', targetDate).get(),
         userRef.collection('consultations').where('date', '==', targetDate).get()
     ]);
 
-    const contextData = `
-    A. JADWAL MENGAJAR:\n${formatTeaching(teachingSnap)}
-    B. EVENT / ACARA:\n${formatEvents(eventSnap)}
-    C. TUGAS / TASKS:\n${formatTasks(taskSnap)}
-    D. KONSULTASI:\n${formatConsultations(consultationSnap)}
-    `;
+    const isAllEmpty = teachingSnap.empty && eventSnap.empty && taskSnap.empty && consultSnap.empty;
 
-    // FASE 3: GENERASI DENGAN ATURAN FORMATTING & SAPAAN
-    const promptFinal = `
-        Kamu adalah asisten dosen bernama "Lecturo Assistant".
-        
-        Konteks:
-        - Nama User: ${finalName}
-        - Tanggal Pencarian: ${targetDate}
-        - Pesan User: "${message}"
+    // FASE 3: GENERASI TAMPILAN MENGGUNAKAN JAVASCRIPT (Bebas Halusinasi & Instan)
+    const formatPriority = (p) => {
+        const val = (p || '').toLowerCase();
+        if (val === 'tinggi') return '🔴 Tinggi';
+        if (val === 'rendah') return '🟢 Rendah';
+        return '🟡 Sedang';
+    };
 
-        DATA JADWAL:
-        ${contextData}
+    const formatStatus = (isCompleted) => {
+        return isCompleted ? '✅ Selesai' : '⏳ Upcoming';
+    };
 
-        ATURAN UTAMA (WAJIB PATUH):
-        1. KONDISI KOSONG: Cek DATA JADWAL. Jika semua kategori tertulis "(Tidak ada...)", maka DILARANG menggunakan format list atau emoji prioritas! Langsung balas dengan sapaan dan kalimat: "Anda tidak memiliki jadwal untuk tanggal ${targetDate}."
-        2. DILARANG MENYALIN INSTRUKSI: Jangan pernah menulis teks aturan seperti "(jika waktu belum lewat)" atau "🔴/🟡/🟢" ke dalam jawaban.
-        3. WAJIB TULIS JUDUL: Pastikan Nama Acara, Matkul, atau Tugas ditulis tebal (contoh: *Rapat Prodi*). Jangan sampai judulnya hilang!
-        4. RAMAH: Jika Pesan User berupa sapaan, awali jawaban dengan sapaan hangat yang menyebut nama user.
+    // Sapaan pembuka
+    let output = `Halo, *${finalName}*!\n`;
 
-        PANDUAN SIMBOL (PILIH HANYA SATU SESUAI DATA):
-        - Prioritas Tinggi = 🔴 Tinggi
-        - Prioritas Sedang = 🟡 Sedang
-        - Prioritas Rendah = 🟢 Rendah
-        - Selesai (true / COMPLETED) = ✅ Selesai
-        - Belum Selesai (false / SCHEDULED) = ⏳ Upcoming
+    if (isAllEmpty) {
+        output += `Anda tidak memiliki agenda atau jadwal kegiatan untuk tanggal *${targetDate}*.`;
+        return res.json({ status: 'success', reply: `${output}\n\n🤖 *Lecturo Assistant*` });
+    }
 
-        FORMAT TAMPILAN YANG DIWAJIBKAN:
-        - *[Judul dari Data]*
-          [Simbol Prioritas] | [Simbol Status]
-          📅 [Tanggal] ⏰ [Jam]
-          📍 [Lokasi]
+    output += `Berikut adalah agenda Anda untuk tanggal *${targetDate}*:\n`;
 
-        CONTOH JAWABAN BENAR (JIKA ADA JADWAL):
-        Halo ${finalName}! Berikut adalah jadwal Anda:
-        
-        🗓️ *ACARA / AGENDA*
-        - *Ujian Skripsi*
-          🟡 Sedang | ⏳ Upcoming
-          📅 10/09/2026 ⏰ 07:00 - 08:00
-          📍 Gedung AE
-    `;
+    // 1. Jadwal Mengajar
+    if (!teachingSnap.empty) {
+        output += `\n👨‍🏫 *JADWAL MENGAJAR*`;
+        teachingSnap.forEach((doc, idx) => {
+            const d = doc.data();
+            output += `\n${idx + 1}. *${d.course_name}* (Pertemuan ke-${d.meeting_number || 1})`;
+            output += `\n   🔴 Tinggi | ${formatStatus(d.is_completed)}`;
+            output += `\n   📅 ${d.date} ⏰ ${d.start_time} - ${d.end_time}`;
+            if (d.classroom && d.classroom !== '-') output += `\n   📍 Ruang: ${d.classroom}`;
+        });
+        output += `\n`;
+    }
 
-    const finalResult = await generateWithFallback(promptFinal);
-    const textReply = (await finalResult.response).text();
-    return res.json({ status: 'success', reply: `${textReply}\n\n🤖 *Lecturo Assistant*` });
+    // 2. Acara / Agenda
+    if (!eventSnap.empty) {
+        output += `\n🗓️ *ACARA / AGENDA*`;
+        eventSnap.forEach((doc, idx) => {
+            const d = doc.data();
+            output += `\n${idx + 1}. *${d.title}*`;
+            output += `\n   ${formatPriority(d.priority)} | ${formatStatus(d.is_completed)}`;
+            output += `\n   📅 ${d.date} ⏰ ${d.time} - ${d.end_time || '-'}`;
+            if (d.location) output += `\n   📍 ${d.location}`;
+        });
+        output += `\n`;
+    }
+
+    // 3. Tugas / Tasks
+    if (!taskSnap.empty) {
+        output += `\n📝 *DAFTAR TUGAS*`;
+        taskSnap.forEach((doc, idx) => {
+            const d = doc.data();
+            output += `\n${idx + 1}. *${d.title}*`;
+            output += `\n   ${formatPriority(d.priority)} | ${formatStatus(d.is_completed)}`;
+            output += `\n   📅 Deadline: ${d.date} ⏰ ${d.time || '-'}`;
+            if (d.location) output += `\n   📍 ${d.location}`;
+        });
+        output += `\n`;
+    }
+
+    // 4. Konsultasi / Bimbingan
+    if (!consultSnap.empty) {
+        output += `\n🎓 *JADWAL SESI BIMBINGAN*`;
+        consultSnap.forEach((doc, idx) => {
+            const d = doc.data();
+            const statusText = d.status === 'COMPLETED' ? '✅ Selesai' : '⏳ Terjadwal';
+            output += `\n${idx + 1}. *${d.title}*`;
+            output += `\n   ${formatPriority(d.priority)} | ${statusText}`;
+            output += `\n   📅 ${d.date} ⏰ ${d.start_time} - ${d.end_time}`;
+            if (d.location && d.location !== 'Belum ditentukan') output += `\n   📍 ${d.location}`;
+        });
+        output += `\n`;
+    }
+
+    return res.json({ status: 'success', reply: `${output.trim()}\n\n🤖 *Lecturo Assistant*` });
 };
 
 // ============================================================================
@@ -414,151 +472,6 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
         return res.json({ status: 'error', reply: "Maaf, format jadwal tidak dapat saya pahami. Mohon sebutkan nama acara dan waktunya dengan jelas.\n\n🤖 *Lecturo Assistant*" });
     }
 };
-
-// // ============================================================================
-// // 4. FUNGSI DELETE (KEMBALI KE HARD DELETE + ANTI HALUSINASI)
-// // ============================================================================
-// const processDeleteSchedule = async (res, userRef, message, contextData) => {
-//     const prompt = `
-//     Pesan user: "${message}"
-
-//     Berikut adalah jadwal user saat ini:
-//     ${contextData}
-
-//     Tugas: Cari tahu jadwal mana yang mau dihapus user dari data di atas.
-//     Wajib kembalikan format JSON murni:
-//     {
-//       "document_id": "ID_DB dari jadwal yang mau dihapus",
-//       "collection": "Koleksi jadwal tersebut (tasks / events / teaching_schedules / consultations)",
-//       "reply": "Teks konfirmasi penghapusan berhasil."
-//     }
-//     Jika jadwal tidak ditemukan, JANGAN buat konfirmasi berhasil. Kosongkan document_id dan isi reply dengan permintaan maaf.
-//     `;
-
-//     const result = await generateWithFallback(prompt);
-//     let cleanJson = (await result.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
-
-//     try {
-//         const aiData = JSON.parse(cleanJson);
-
-//         if (aiData.document_id && aiData.document_id.trim() !== "") {
-//             await userRef.collection(aiData.collection).doc(aiData.document_id).delete();
-//             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
-//         } else {
-//             return res.json({
-//                 status: 'success',
-//                 reply: "Maaf, saya tidak dapat menemukan jadwal tersebut di database. Pastikan nama jadwalnya sesuai.\n\n🤖 *Lecturo Assistant*"
-//             });
-//         }
-//     } catch (e) {
-//         console.error("Gagal parse Delete:", e);
-//         return res.json({ status: 'error', reply: "Maaf, saya gagal memproses permintaan hapus Anda.\n\n🤖 *Lecturo Assistant*" });
-//     }
-// };
-
-// // ============================================================================
-// // 5. ORKESTRATOR (GERBANG UTAMA CHATBOT)
-// // ============================================================================
-// const chatWithGemini = async (req, res) => {
-//     try {
-//         const { message, uid, userName } = req.body;
-//         if (!message || !uid) return res.status(400).json({ error: 'Data tidak lengkap' });
-
-//         const formatter = new Intl.DateTimeFormat('id-ID', {
-//             timeZone: 'Asia/Makassar',
-//             day: '2-digit',
-//             month: '2-digit',
-//             year: 'numeric',
-//             hour: '2-digit',
-//             minute: '2-digit',
-//             hour12: false
-//         });
-
-//         let formattedNow = formatter.format(new Date());
-//         formattedNow = formattedNow.replace(/\./g, ':');
-
-//         const userRef = db.collection('users').doc(uid);
-
-//         const userSnap = await userRef.get();
-//         const userData = userSnap.data() || {};
-//         const gender = userData.gender || "";
-
-//         let panggilan = "";
-//         if (gender.toLowerCase() === "laki-laki") {
-//             panggilan = "Bapak";
-//         } else if (gender.toLowerCase() === "perempuan") {
-//             panggilan = "Ibu";
-//         }
-
-//         const finalName = userName || "Dosen";
-//         const finalNameWithTitle = panggilan ? `${panggilan} ${finalName}` : finalName;
-
-//         const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
-//             userRef.collection('teaching_schedules').get(),
-//             userRef.collection('events').get(),
-//             userRef.collection('tasks').get(),
-//             userRef.collection('consultations').get()
-//         ]);
-
-//         const contextData = `
-//         A. JADWAL MENGAJAR:\n${formatTeaching(teachingSnap)}
-//         B. EVENT / ACARA:\n${formatEvents(eventSnap)}
-//         C. TUGAS / TASKS:\n${formatTasks(taskSnap)}
-//         D. KONSULTASI:\n${formatConsultations(consultationSnap)}
-//         `;
-
-//         const intentPrompt = `Pesan user: "${message}". Apakah tujuan utama user? 
-//         Pilih HANYA SATU KATA dari daftar berikut:
-//         - "CREATE" (jika ingin menambah/membuat jadwal baru)
-//         - "DELETE" (jika ingin menghapus/membatalkan jadwal)
-//         - "READ" (jika menanyakan jadwal, meminta ringkasan, atau sekadar menyapa/salam)
-//         - "OUT_OF_SCOPE" (jika bertanya hal di luar jadwal akademik, seperti matematika, coding, pengetahuan umum, cuaca, dll).
-//         Jawab HANYA DENGAN SATU KATA tersebut tanpa tambahan apapun!`;
-
-//         const intentResult = await generateWithFallback(intentPrompt);
-//         const intentText = (await intentResult.response).text().toUpperCase();
-
-//         console.log(`🤖 Intent Deteksi: ${intentText} | User: ${finalNameWithTitle}`);
-
-//         if (intentText.includes('CREATE')) {
-//             return await processCreateSchedule(res, userRef, message, formattedNow);
-//         }
-//         else if (intentText.includes('DELETE')) {
-//             return await processDeleteSchedule(res, userRef, message, contextData);
-//         }
-//         else if (intentText.includes('OUT_OF_SCOPE') || intentText.includes('SCOPE')) {
-//             return res.json({
-//                 status: 'success',
-//                 reply: `Maaf ${finalNameWithTitle}, saya adalah asisten yang dirancang khusus hanya untuk mengelola jadwal akademik Anda. Saya tidak dapat menjawab pertanyaan terkait hal tersebut. 🙏\n\nSilakan tanyakan seputar jadwal mengajar, acara, tugas, atau bimbingan Anda.\n\n🤖 *Lecturo Assistant*`
-//             });
-//         }
-//         else {
-//             return await processReadSchedule(res, message, finalNameWithTitle, formattedNow, contextData);
-//         }
-
-//     } catch (error) {
-//         console.error("Error Chat AI:", error.message);
-
-//         const isBusy = error.status === 429 || error.status === 503 ||
-//             error.message.includes('Quota') || error.message.includes('429') ||
-//             error.message.includes('503');
-
-//         if (isBusy) {
-//             const namaSapaan = typeof finalNameWithTitle !== 'undefined' ? finalNameWithTitle : "Bapak/Ibu";
-
-//             return res.json({
-//                 status: 'success',
-//                 reply: `⚠️ *Sistem Sedang Sibuk*\n\nMaaf ${namaSapaan}, layanan AI sedang menangani banyak permintaan. Mohon tunggu sekitar 1 menit lalu coba kirimkan pesan Anda lagi. 🙏\n\n🤖 *Lecturo System*`
-//             });
-//         }
-
-//         return res.json({
-//             status: 'success',
-//             reply: "⚠️ *Terjadi Kesalahan*\n\nMaaf, saya gagal memproses permintaan Anda saat ini."
-//         });
-//     }
-// };
-
 
 // ============================================================================
 // 4. FUNGSI DELETE (Pindahkan pemanggilan DB ke sini agar tidak membebani fungsi lain)
