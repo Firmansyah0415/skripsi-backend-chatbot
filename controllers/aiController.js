@@ -280,7 +280,7 @@ const processReadSchedule = async (res, userRef, message, finalName, formattedNo
 };
 
 // ============================================================================
-// 3. FUNGSI CREATE (MENAMBAH JADWAL BARU - DENGAN VALIDASI PINTAR)
+// 3. FUNGSI CREATE (MENAMBAH JADWAL BARU + PENDETEKSI BENTROK JADWAL)
 // ============================================================================
 const processCreateSchedule = async (res, userRef, message, formattedNow) => {
     const prompt = `
@@ -327,18 +327,24 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
             }
 
             if (!('description' in sanitizedData)) sanitizedData.description = "";
-            // 🔴 PERBAIKAN BUG LOKASI/CLASSROOM KOSONG
             if (aiData.collection === 'teaching_schedules') {
                 if (!('classroom' in sanitizedData)) sanitizedData.classroom = "";
             } else {
                 if (!('location' in sanitizedData)) sanitizedData.location = "";
             }
+
+            // Normalisasi Jam Mulai & Jam Selesai
+            const startTimeToUse = sanitizedData.time || sanitizedData.start_time || "08:00";
             if (!('end_time' in sanitizedData) || sanitizedData.end_time === "") {
-                const startTimeToUse = sanitizedData.time || sanitizedData.start_time || "08:00";
                 sanitizedData.end_time = addOneHour(startTimeToUse);
             }
+            if (aiData.collection === 'teaching_schedules' || aiData.collection === 'consultations') {
+                sanitizedData.start_time = startTimeToUse;
+            } else {
+                sanitizedData.time = startTimeToUse;
+            }
 
-            // 🟡 PERBAIKAN: Default Priority jika kosong atau aneh
+            // Normalisasi Prioritas
             if (!sanitizedData.priority || sanitizedData.priority === "") {
                 sanitizedData.priority = "Sedang";
             } else {
@@ -348,7 +354,123 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
                 else sanitizedData.priority = "Sedang";
             }
 
-            // PAYLOAD STANDAR
+            // ====================================================================
+            // 🛡️ FITUR SAKTI: DETEKSI JADWAL BERTABRAKAN (CONFLICT DETECTION)
+            // ====================================================================
+            const targetDate = sanitizedData.date;
+            const newStartTime = startTimeToUse;
+            const newEndTime = sanitizedData.end_time;
+            const newTitle = sanitizedData.course_name || sanitizedData.title || "Agenda Baru";
+
+            const timeToMinutes = (timeStr) => {
+                if (!timeStr || !timeStr.includes(':')) return null;
+                const [h, m] = timeStr.split(':');
+                return parseInt(h, 10) * 60 + parseInt(m, 10);
+            };
+
+            const newStartMin = timeToMinutes(newStartTime);
+            const newEndMin = timeToMinutes(newEndTime);
+
+            if (newStartMin !== null && newEndMin !== null && targetDate) {
+                // Tarik seluruh jadwal aktif pada tanggal tersebut secara paralel
+                const [teachingSnap, eventSnap, taskSnap, consultSnap] = await Promise.all([
+                    userRef.collection('teaching_schedules').where('date', '==', targetDate).get(),
+                    userRef.collection('events').where('date', '==', targetDate).get(),
+                    userRef.collection('tasks').where('date', '==', targetDate).get(),
+                    userRef.collection('consultations').where('date', '==', targetDate).get()
+                ]);
+
+                const conflicts = [];
+
+                // 1. Periksa Jadwal Mengajar
+                teachingSnap.docs.forEach(doc => {
+                    const d = doc.data();
+                    if (d.is_completed) return;
+                    const existStart = timeToMinutes(d.start_time);
+                    const existEnd = timeToMinutes(d.end_time);
+                    if (existStart !== null && existEnd !== null) {
+                        if (newStartMin < existEnd && newEndMin > existStart) {
+                            conflicts.push({
+                                title: `👨‍🏫 Mengajar: ${d.course_name}`,
+                                time: `${d.start_time} - ${d.end_time}`,
+                                location: d.classroom && d.classroom !== '-' ? d.classroom : ''
+                            });
+                        }
+                    }
+                });
+
+                // 2. Periksa Acara / Agenda
+                eventSnap.docs.forEach(doc => {
+                    const d = doc.data();
+                    if (d.is_completed) return;
+                    const existStart = timeToMinutes(d.time);
+                    const existEnd = timeToMinutes(d.end_time || addOneHour(d.time));
+                    if (existStart !== null && existEnd !== null) {
+                        if (newStartMin < existEnd && newEndMin > existStart) {
+                            conflicts.push({
+                                title: `🗓️ Acara: ${d.title}`,
+                                time: `${d.time} - ${d.end_time || addOneHour(d.time)}`,
+                                location: d.location || ''
+                            });
+                        }
+                    }
+                });
+
+                // 3. Periksa Tugas
+                taskSnap.docs.forEach(doc => {
+                    const d = doc.data();
+                    if (d.is_completed) return;
+                    const existStart = timeToMinutes(d.time);
+                    const existEnd = timeToMinutes(d.end_time || addOneHour(d.time));
+                    if (existStart !== null && existEnd !== null) {
+                        if (newStartMin < existEnd && newEndMin > existStart) {
+                            conflicts.push({
+                                title: `📝 Tugas: ${d.title}`,
+                                time: `${d.time} - ${d.end_time || addOneHour(d.time)}`,
+                                location: d.location || ''
+                            });
+                        }
+                    }
+                });
+
+                // 4. Periksa Bimbingan / Konsultasi
+                consultSnap.docs.forEach(doc => {
+                    const d = doc.data();
+                    if (d.status === 'CANCELLED' || d.status === 'REJECTED' || d.status === 'COMPLETED') return;
+                    const existStart = timeToMinutes(d.start_time);
+                    const existEnd = timeToMinutes(d.end_time);
+                    if (existStart !== null && existEnd !== null) {
+                        if (newStartMin < existEnd && newEndMin > existStart) {
+                            conflicts.push({
+                                title: `🎓 Bimbingan: ${d.title}`,
+                                time: `${d.start_time} - ${d.end_time}`,
+                                location: d.location && d.location !== 'Belum ditentukan' ? d.location : ''
+                            });
+                        }
+                    }
+                });
+
+                // JIKA TERJADI BENTROK: TOLAK DAN BERI PERINGATAN
+                if (conflicts.length > 0) {
+                    let conflictReply = `⚠️ *JADWAL BERTABRAKAN (BENTROK)!*\n\n`;
+                    conflictReply += `Gagal menjadwalkan *${newTitle}* (⏰ ${newStartTime} - ${newEndTime}) pada tanggal *${targetDate}* karena bertabrakan dengan agenda yang sudah ada:\n\n`;
+
+                    conflicts.forEach((c, idx) => {
+                        conflictReply += `${idx + 1}. *${c.title}*\n`;
+                        conflictReply += `   ⏰ ${c.time}`;
+                        if (c.location) conflictReply += ` | 📍 ${c.location}`;
+                        conflictReply += `\n`;
+                    });
+
+                    conflictReply += `\nMohon tentukan jam atau tanggal lain agar agenda Anda tidak tumpang tindih.`;
+
+                    console.log(`⚠️ Bentrok terdeteksi untuk user ${userRef.id} pada tanggal ${targetDate}`);
+                    return res.json({ status: 'success', reply: `${conflictReply}\n\n🤖 *Lecturo Assistant*` });
+                }
+            }
+            // ====================================================================
+
+            // PAYLOAD STANDAR UNTUK DISIMPAN
             const finalData = {
                 ...sanitizedData,
                 input_source: 'WA_BOT',
@@ -356,40 +478,26 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
                 notification_minutes: 15
             };
 
-            // 🎯 FILTER KOLEKSI SPESIFIK
+            // Filter Spesifik Tiap Koleksi
             if (aiData.collection === 'consultations') {
                 finalData.status = 'SCHEDULED';
                 finalData.recurring_id = "";
-                delete finalData.is_completed; // Mencegah is_completed masuk ke DB
-            }
-            // =======================================================
-            // 🔴 GANTI BLOK TEACHING_SCHEDULES INI SAJA
-            // =======================================================
-            else if (aiData.collection === 'teaching_schedules') {
+                delete finalData.is_completed;
+            } else if (aiData.collection === 'teaching_schedules') {
                 finalData.is_completed = false;
                 finalData.meeting_number = parseInt(sanitizedData.meeting_number) || 1;
-
-                // 1. Pastikan student_count diisi 0 jika gagal di-parse atau tidak ada
                 finalData.student_count = parseInt(sanitizedData.student_count) || 0;
-
-                // 2. Pastikan classroom string kosong ("") jika user tidak menyebutkan lokasi
                 finalData.classroom = sanitizedData.classroom || "";
-
                 if (!finalData.class_code) finalData.class_code = "-";
-
-                // 3. HAPUS PAKSA description dan priority agar sama persis dengan Android & Web!
                 delete finalData.description;
                 delete finalData.priority;
-            }
-            // =======================================================
-            else {
+            } else {
                 finalData.is_completed = false;
             }
 
             await userRef.collection(aiData.collection).add(finalData);
             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
-        }
-        else {
+        } else {
             return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
         }
 
