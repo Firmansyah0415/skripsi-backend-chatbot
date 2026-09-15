@@ -75,8 +75,7 @@ const generateWithFallback = async (prompt) => {
                     models: [
                         "meta-llama/llama-3.3-70b-instruct:free",
                         "qwen/qwen-2.5-72b-instruct:free",
-                        "meta-llama/llama-3.1-8b-instruct:free",
-                        "mistralai/mistral-small-24b-instruct-2501:free"
+                        "meta-llama/llama-3.1-8b-instruct:free"
                     ],
                     messages: [
                         {
