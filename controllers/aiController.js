@@ -1,52 +1,22 @@
-const model = require('../config/gemini');
 const db = require('../config/firebaseConfig');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // ============================================================================
-// FUNGSI GEMINI (ASLI) - DIKOMENTARI SAAT TES LM STUDIO
-// ============================================================================
-/*
-const generateWithFallback = async (prompt) => {
-    try {
-        // 1. Coba ketuk pintu utama (gemini-2.5-flash dari config/gemini.js)
-        return await model.generateContent(prompt);
-    } catch (error) {
-        // 2. Jika pintu utama penuh atau kena limit (Error 503 / 429)
-        const isOverloaded = error.status === 503 || error.status === 429 ||
-            error.message.includes('503') || error.message.includes('429') ||
-            error.message.includes('high demand') || error.message.includes('Quota exceeded');
-
-        if (isOverloaded) {
-            console.warn("⚠️ Server Gemini Utama Penuh! Mengalihkan ke Model Cadangan (gemini-2.0-flash)...");
-            try {
-                // Gunakan API Key yang ada
-                const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-                const genAI = new GoogleGenerativeAI(apiKey);
-
-                // 3. Ketuk pintu cadangan yang BERBEDA agar tidak bertabrakan dengan antrean pintu utama
-                const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-                return await fallbackModel.generateContent(prompt);
-            } catch (fallbackError) {
-                // Jika pintu cadangan juga ikut penuh, lempar error ke bawah
-                throw fallbackError;
-            }
-        }
-
-        // Lempar error jika bukan karena masalah server penuh (misal: internet putus)
-        throw error;
-    }
-};
-*/
-
-// ============================================================================
-// FUNGSI LM STUDIO (LOCAL AI) - UPDATE DENGAN ANTI-THINK FILTER
+// SISTEM HYBRID FAILOVER: LM STUDIO (UTAMA) -> OPENROUTER (CADANGAN OTOMATIS)
 // ============================================================================
 const generateWithFallback = async (prompt) => {
+    // ------------------------------------------------------------------------
+    // TAHAP 1: COBA KETUK PINTU UTAMA (LM STUDIO LOKAL)
+    // ------------------------------------------------------------------------
     try {
-        console.log("🤖 Menghubungi LM Studio Local Server...");
+        console.log("🤖 [1/2] Menghubungi LM Studio Local Server...");
+
+        // Sabuk pengaman: batas waktu tunggu 4 detik agar bot tidak bengong jika laptop mati
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
         const response = await fetch('https://diego-beaky-unappeasably.ngrok-free.dev/v1/chat/completions', {
             method: 'POST',
+            signal: controller.signal,
             headers: {
                 'Content-Type': 'application/json',
                 'ngrok-skip-browser-warning': 'true'
@@ -62,29 +32,83 @@ const generateWithFallback = async (prompt) => {
             })
         });
 
+        clearTimeout(timeoutId);
+
         if (!response.ok) {
-            throw new Error(`LM Studio Error: ${response.statusText}`);
+            throw new Error(`LM Studio HTTP ${response.status}: ${response.statusText}`);
         }
 
         const data = await response.json();
         let aiResponseText = data.choices[0].message.content;
-
-        // =====================================================================
-        // 🔥 BARIS SAKTI BARU: SAPU BERSIH TAG <THINK>...</THINK> beserta isinya!
-        // =====================================================================
         aiResponseText = aiResponseText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-        // =====================================================================
 
-        // BUNGKUS JAWABAN LM STUDIO AGAR TERLIHAT SEPERTI FORMAT GEMINI
+        console.log("✅ Berhasil dilayani oleh: LM Studio (Lokal)");
         return {
             response: {
                 text: () => aiResponseText
             }
         };
 
-    } catch (error) {
-        console.error("⚠️ Gagal menghubungi AI (LM Studio):", error);
-        throw error;
+    } catch (lmError) {
+        // --------------------------------------------------------------------
+        // TAHAP 2: JIKA LM STUDIO MATI/TIMEOUT, LEMPAR KE OPENROUTER (CLOUD)
+        // --------------------------------------------------------------------
+        console.warn(`⚠️ LM Studio tidak merespons (${lmError.message}). Mengalihkan ke OpenRouter...`);
+
+        try {
+            const apiKey = process.env.OPENROUTER_API_KEY;
+            if (!apiKey) {
+                throw new Error("OPENROUTER_API_KEY belum dipasang di file .env");
+            }
+
+            console.log("🌐 [2/2] Menghubungi OpenRouter (Cloud Backup)...");
+
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': 'https://lecturo.id',
+                    'X-Title': 'Lecturo Assistant'
+                },
+                body: JSON.stringify({
+                    models: [
+                        "meta-llama/llama-3.3-70b-instruct:free",
+                        "qwen/qwen-2.5-72b-instruct:free",
+                        "meta-llama/llama-3.1-8b-instruct:free",
+                        "mistralai/mistral-small-24b-instruct-2501:free"
+                    ],
+                    messages: [
+                        {
+                            role: "system",
+                            content: "Kamu adalah asisten akademik bernama Lecturo Assistant. Jawab dengan ringkas, sopan, dan patuhi instruksi JSON atau teks yang diminta tanpa basa-basi."
+                        },
+                        { role: "user", content: prompt }
+                    ],
+                    temperature: 0.1
+                })
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw new Error(`OpenRouter HTTP ${response.status}: ${errorBody}`);
+            }
+
+            const data = await response.json();
+            let aiResponseText = data.choices[0].message.content;
+            aiResponseText = aiResponseText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+            console.log("✅ Berhasil dilayani oleh: OpenRouter Cloud");
+            return {
+                response: {
+                    text: () => aiResponseText
+                }
+            };
+
+        } catch (openRouterError) {
+            console.error("❌ Kedua jalur AI (LM Studio & OpenRouter) gagal:", openRouterError.message);
+            throw openRouterError;
+        }
     }
 };
 // ============================================================================
@@ -140,100 +164,6 @@ const formatConsultations = (docs) => {
     });
     return text;
 };
-
-// // ============================================================================
-// // 2. FUNGSI READ (ARSITEKTUR RAG TEXT-TO-QUERY + TAMPILAN ESTETIK)
-// // ============================================================================
-// const processReadSchedule = async (res, userRef, message, finalName, formattedNow, todayStr, tomorrowStr) => {
-//     // FASE 1: EKSTRAKSI NIAT TANGGAL
-//     const queryPrompt = `
-//     Tanggal Hari Ini: ${todayStr}
-//     Tanggal Besok: ${tomorrowStr}
-
-//     Pesan user: "${message}"
-
-//     Tugas: Tentukan tanggal berapa jadwal yang ingin dilihat user berdasarkan pesan di atas.
-//     Wajib kembalikan HANYA JSON MURNI (tanpa markdown):
-//     {
-//         "is_specific_date": true,
-//         "target_date": "DD/MM/YYYY"
-//     }
-//     Jika user hanya bilang "jadwal saya" atau hanya menyapa (contoh: "Halo", "Pagi"), gunakan Tanggal Hari Ini.
-//     `;
-
-//     const queryResult = await generateWithFallback(queryPrompt);
-//     let cleanJson = (await queryResult.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
-
-//     let targetDate = todayStr; // Fallback ke hari ini
-//     try {
-//         const aiQuery = JSON.parse(cleanJson);
-//         if (aiQuery.target_date) targetDate = aiQuery.target_date;
-//     } catch (e) {
-//         console.warn("⚠️ Gagal parse intent tanggal dari AI, fallback ke hari ini:", e.message);
-//     }
-
-//     console.log(`🔍 [PENCARIAN DB] Mengambil jadwal khusus tanggal: ${targetDate}`);
-
-//     // FASE 2: RETRIEVAL (Bebas Halusinasi, murni dari Database)
-//     const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
-//         userRef.collection('teaching_schedules').where('date', '==', targetDate).get(),
-//         userRef.collection('events').where('date', '==', targetDate).get(),
-//         userRef.collection('tasks').where('date', '==', targetDate).get(),
-//         userRef.collection('consultations').where('date', '==', targetDate).get()
-//     ]);
-
-//     const contextData = `
-//     A. JADWAL MENGAJAR:\n${formatTeaching(teachingSnap)}
-//     B. EVENT / ACARA:\n${formatEvents(eventSnap)}
-//     C. TUGAS / TASKS:\n${formatTasks(taskSnap)}
-//     D. KONSULTASI:\n${formatConsultations(consultationSnap)}
-//     `;
-
-//     // FASE 3: GENERASI DENGAN ATURAN FORMATTING & SAPAAN
-//     const promptFinal = `
-//         Kamu adalah asisten dosen bernama "Lecturo Assistant".
-
-//         Konteks:
-//         - Nama User: ${finalName}
-//         - Tanggal Pencarian: ${targetDate}
-//         - Pesan User: "${message}"
-
-//         DATA JADWAL:
-//         ${contextData}
-
-//         ATURAN UTAMA (WAJIB PATUH):
-//         1. KONDISI KOSONG: Cek DATA JADWAL. Jika semua kategori tertulis "(Tidak ada...)", maka DILARANG menggunakan format list atau emoji prioritas! Langsung balas dengan sapaan dan kalimat: "Anda tidak memiliki jadwal untuk tanggal ${targetDate}."
-//         2. DILARANG MENYALIN INSTRUKSI: Jangan pernah menulis teks aturan seperti "(jika waktu belum lewat)" atau "🔴/🟡/🟢" ke dalam jawaban.
-//         3. WAJIB TULIS JUDUL: Pastikan Nama Acara, Matkul, atau Tugas ditulis tebal (contoh: *Rapat Prodi*). Jangan sampai judulnya hilang!
-//         4. RAMAH: Jika Pesan User berupa sapaan, awali jawaban dengan sapaan hangat yang menyebut nama user.
-
-//         PANDUAN SIMBOL (PILIH HANYA SATU SESUAI DATA):
-//         - Prioritas Tinggi = 🔴 Tinggi
-//         - Prioritas Sedang = 🟡 Sedang
-//         - Prioritas Rendah = 🟢 Rendah
-//         - Selesai (true / COMPLETED) = ✅ Selesai
-//         - Belum Selesai (false / SCHEDULED) = ⏳ Upcoming
-
-//         FORMAT TAMPILAN YANG DIWAJIBKAN:
-//         - *[Judul dari Data]*
-//           [Simbol Prioritas] | [Simbol Status]
-//           📅 [Tanggal] ⏰ [Jam]
-//           📍 [Lokasi]
-
-//         CONTOH JAWABAN BENAR (JIKA ADA JADWAL):
-//         Halo ${finalName}! Berikut adalah jadwal Anda:
-
-//         🗓️ *ACARA / AGENDA*
-//         - *Ujian Skripsi*
-//           🟡 Sedang | ⏳ Upcoming
-//           📅 10/09/2026 ⏰ 07:00 - 08:00
-//           📍 Gedung AE
-//     `;
-
-//     const finalResult = await generateWithFallback(promptFinal);
-//     const textReply = (await finalResult.response).text();
-//     return res.json({ status: 'success', reply: `${textReply}\n\n🤖 *Lecturo Assistant*` });
-// };
 
 // ============================================================================
 // 2. FUNGSI READ (ARSITEKTUR RAG: AI EKSTRAK TANGGAL + JS TEMPLATE STRING)
