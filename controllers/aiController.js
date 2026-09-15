@@ -297,10 +297,10 @@ const processReadSchedule = async (res, userRef, message, finalName, formattedNo
 
     output += `Berikut adalah agenda Anda untuk tanggal *${targetDate}*:\n`;
 
-    // 1. Jadwal Mengajar
+    // 1. Jadwal Mengajar (Gunakan .docs.forEach agar idx terisi angka 0, 1, 2...)
     if (!teachingSnap.empty) {
         output += `\n👨‍🏫 *JADWAL MENGAJAR*`;
-        teachingSnap.forEach((doc, idx) => {
+        teachingSnap.docs.forEach((doc, idx) => {
             const d = doc.data();
             output += `\n${idx + 1}. *${d.course_name}* (Pertemuan ke-${d.meeting_number || 1})`;
             output += `\n   🔴 Tinggi | ${formatStatus(d.is_completed)}`;
@@ -313,7 +313,7 @@ const processReadSchedule = async (res, userRef, message, finalName, formattedNo
     // 2. Acara / Agenda
     if (!eventSnap.empty) {
         output += `\n🗓️ *ACARA / AGENDA*`;
-        eventSnap.forEach((doc, idx) => {
+        eventSnap.docs.forEach((doc, idx) => {
             const d = doc.data();
             output += `\n${idx + 1}. *${d.title}*`;
             output += `\n   ${formatPriority(d.priority)} | ${formatStatus(d.is_completed)}`;
@@ -326,7 +326,7 @@ const processReadSchedule = async (res, userRef, message, finalName, formattedNo
     // 3. Tugas / Tasks
     if (!taskSnap.empty) {
         output += `\n📝 *DAFTAR TUGAS*`;
-        taskSnap.forEach((doc, idx) => {
+        taskSnap.docs.forEach((doc, idx) => {
             const d = doc.data();
             output += `\n${idx + 1}. *${d.title}*`;
             output += `\n   ${formatPriority(d.priority)} | ${formatStatus(d.is_completed)}`;
@@ -339,7 +339,7 @@ const processReadSchedule = async (res, userRef, message, finalName, formattedNo
     // 4. Konsultasi / Bimbingan
     if (!consultSnap.empty) {
         output += `\n🎓 *JADWAL SESI BIMBINGAN*`;
-        consultSnap.forEach((doc, idx) => {
+        consultSnap.docs.forEach((doc, idx) => {
             const d = doc.data();
             const statusText = d.status === 'COMPLETED' ? '✅ Selesai' : '⏳ Terjadwal';
             output += `\n${idx + 1}. *${d.title}*`;
