@@ -72,11 +72,8 @@ const generateWithFallback = async (prompt) => {
                     'X-Title': 'Lecturo Assistant'
                 },
                 body: JSON.stringify({
-                    models: [
-                        "meta-llama/llama-3.3-70b-instruct:free",
-                        "qwen/qwen-2.5-72b-instruct:free",
-                        "meta-llama/llama-3.1-8b-instruct:free"
-                    ],
+                    // 🔥 GUNAKAN FREE ROUTER RESMI OPENROUTER (ANTI EXPIRED / ANTI BERBAYAR)
+                    model: "openrouter/free",
                     messages: [
                         {
                             role: "system",
