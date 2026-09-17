@@ -508,6 +508,252 @@ const processCreateSchedule = async (res, userRef, message, formattedNow) => {
 };
 
 // ============================================================================
+// 3.5 FUNGSI UPDATE / RESCHEDULE (MENGGESER JAM / TANGGAL / LOKASI + CONFLICT CHECK)
+// ============================================================================
+const processUpdateSchedule = async (res, userRef, message, formattedNow, todayStr, tomorrowStr) => {
+    console.log(`🔍 [PENCARIAN DB] Mengambil jadwal aktif untuk di-update/reschedule...`);
+
+    // 1. Tarik seluruh jadwal aktif agar AI punya konteks jadwal mana yang mau diubah
+    const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
+        userRef.collection('teaching_schedules').where('is_completed', '==', false).get(),
+        userRef.collection('events').where('is_completed', '==', false).get(),
+        userRef.collection('tasks').where('is_completed', '==', false).get(),
+        userRef.collection('consultations').where('status', '==', 'SCHEDULED').get()
+    ]);
+
+    const contextData = `
+    A. JADWAL MENGAJAR:\n${formatTeaching(teachingSnap)}
+    B. EVENT / ACARA:\n${formatEvents(eventSnap)}
+    C. TUGAS / TASKS:\n${formatTasks(taskSnap)}
+    D. KONSULTASI:\n${formatConsultations(consultationSnap)}
+    `;
+
+    // Prompt bersih bebas backtick di dalamnya
+    const prompt = `
+    WAKTU SAAT INI (SERVER): ${formattedNow}
+    Tanggal Hari Ini: ${todayStr}
+    Tanggal Besok: ${tomorrowStr}
+
+    Pesan user: "${message}"
+
+    Daftar Jadwal Aktif Saat Ini:
+    ${contextData}
+
+    Tugas:
+    1. Cocokkan jadwal mana yang ingin diubah/digeser oleh user dan ambil ID_DB nya.
+    2. Ekstrak data apa saja yang diubah (tanggal, jam mulai, jam selesai, ruangan/lokasi, atau judul).
+    
+    Format balasan HANYA JSON murni (tanpa tanda kutip tiga atau format markdown):
+    {
+      "document_id": "ID_DB",
+      "collection": "teaching_schedules ATAU events ATAU tasks ATAU consultations",
+      "updated_fields": {
+        "date": "DD/MM/YYYY (isi hanya jika tanggal berubah)",
+        "time": "HH:mm (isi hanya jika jam mulai tugas/acara berubah)",
+        "start_time": "HH:mm (isi hanya jika jam mulai mengajar/konsultasi berubah)",
+        "end_time": "HH:mm (isi jika jam selesai berubah atau sebut estimasi)",
+        "location": "Lokasi baru (khusus acara/tugas/konsultasi)",
+        "classroom": "Ruang baru (khusus mengajar)",
+        "title": "Judul baru jika ada perubahan"
+      },
+      "reply": "Pesan konfirmasi ramah yang menyebutkan detail perubahan."
+    }
+    Jika jadwal yang dimaksud tidak ditemukan, kosongkan document_id dengan string kosong "".
+    `;
+
+    const result = await generateWithFallback(prompt);
+    // Pembersihan regex yang rapat dan aman
+    let cleanJson = (await result.response).text().replace(/```json/gi, '').replace(/```/g, '').trim();
+
+    try {
+        const aiData = JSON.parse(cleanJson);
+
+        const validCollections = ['teaching_schedules', 'events', 'tasks', 'consultations'];
+        if (!aiData.document_id || aiData.document_id.trim() === "" || !validCollections.includes(aiData.collection)) {
+            return res.json({
+                status: 'success',
+                reply: `Maaf, jadwal yang ingin Anda ubah tidak ditemukan di database Anda.\n\n🤖 *Lecturo Assistant*`
+            });
+        }
+
+        const docRef = userRef.collection(aiData.collection).doc(aiData.document_id);
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+            return res.json({
+                status: 'success',
+                reply: `Maaf, jadwal tersebut sudah tidak ada di database.\n\n🤖 *Lecturo Assistant*`
+            });
+        }
+
+        const currentData = docSnap.data();
+        const fields = aiData.updated_fields || {};
+
+        // Penyesuaian khusus koleksi teaching_schedules (mengajar memakai course_name & classroom)
+        if (aiData.collection === 'teaching_schedules') {
+            if (fields.title) {
+                fields.course_name = fields.title;
+                delete fields.title;
+            }
+            if (fields.location && !fields.classroom) {
+                fields.classroom = fields.location;
+                delete fields.location;
+            }
+            if (fields.time && !fields.start_time) {
+                fields.start_time = fields.time;
+                delete fields.time;
+            }
+        } else if (aiData.collection === 'consultations') {
+            if (fields.time && !fields.start_time) {
+                fields.start_time = fields.time;
+                delete fields.time;
+            }
+        } else {
+            // events & tasks menggunakan field 'time'
+            if (fields.start_time && !fields.time) {
+                fields.time = fields.start_time;
+                delete fields.start_time;
+            }
+        }
+
+        // Tentukan nilai efektif tanggal & jam untuk validasi bentrok
+        const effectiveDate = fields.date || currentData.date;
+        const effectiveStartTime = fields.start_time || fields.time || currentData.start_time || currentData.time || "08:00";
+        let effectiveEndTime = fields.end_time || currentData.end_time || addOneHour(effectiveStartTime);
+
+        // Jika jam mulai digeser namun jam selesai tidak disebut, hitung durasi proporsional
+        if ((fields.start_time || fields.time) && !fields.end_time) {
+            const oldStart = currentData.start_time || currentData.time;
+            const oldEnd = currentData.end_time;
+            if (oldStart && oldEnd && oldStart.includes(':') && oldEnd.includes(':')) {
+                const [oh1, om1] = oldStart.split(':').map(Number);
+                const [oh2, om2] = oldEnd.split(':').map(Number);
+                const diffMinutes = Math.max((oh2 * 60 + om2) - (oh1 * 60 + om1), 30);
+                const [nh, nm] = effectiveStartTime.split(':').map(Number);
+                const newEndMin = (nh * 60 + nm + diffMinutes) % (24 * 60);
+                const endH = Math.floor(newEndMin / 60).toString().padStart(2, '0');
+                const endM = (newEndMin % 60).toString().padStart(2, '0');
+                effectiveEndTime = `${endH}:${endM}`;
+            } else {
+                effectiveEndTime = addOneHour(effectiveStartTime);
+            }
+            fields.end_time = effectiveEndTime;
+        }
+
+        // ====================================================================
+        // 🛡️ DETEKSI BENTROK PADA JAM & TANGGAL BARU
+        // ====================================================================
+        const timeToMinutes = (timeStr) => {
+            if (!timeStr || !timeStr.includes(':')) return null;
+            const [h, m] = timeStr.split(':');
+            return parseInt(h, 10) * 60 + parseInt(m, 10);
+        };
+
+        const newStartMin = timeToMinutes(effectiveStartTime);
+        const newEndMin = timeToMinutes(effectiveEndTime);
+
+        if (newStartMin !== null && newEndMin !== null && effectiveDate) {
+            const [tSnap, eSnap, tkSnap, cSnap] = await Promise.all([
+                userRef.collection('teaching_schedules').where('date', '==', effectiveDate).get(),
+                userRef.collection('events').where('date', '==', effectiveDate).get(),
+                userRef.collection('tasks').where('date', '==', effectiveDate).get(),
+                userRef.collection('consultations').where('date', '==', effectiveDate).get()
+            ]);
+
+            const conflicts = [];
+            const targetDocId = aiData.document_id;
+
+            // 1. Periksa Mengajar (Kecualikan dokumen sendiri)
+            tSnap.docs.forEach(doc => {
+                if (doc.id === targetDocId) return;
+                const d = doc.data();
+                if (d.is_completed) return;
+                const existStart = timeToMinutes(d.start_time);
+                const existEnd = timeToMinutes(d.end_time);
+                if (existStart !== null && existEnd !== null && newStartMin < existEnd && newEndMin > existStart) {
+                    conflicts.push({ title: `👨‍🏫 Mengajar: ${d.course_name}`, time: `${d.start_time} - ${d.end_time}` });
+                }
+            });
+
+            // 2. Periksa Acara (Kecualikan dokumen sendiri)
+            eSnap.docs.forEach(doc => {
+                if (doc.id === targetDocId) return;
+                const d = doc.data();
+                if (d.is_completed) return;
+                const existStart = timeToMinutes(d.time);
+                const existEnd = timeToMinutes(d.end_time || addOneHour(d.time));
+                if (existStart !== null && existEnd !== null && newStartMin < existEnd && newEndMin > existStart) {
+                    conflicts.push({ title: `🗓️ Acara: ${d.title}`, time: `${d.time} - ${d.end_time || addOneHour(d.time)}` });
+                }
+            });
+
+            // 3. Periksa Tugas (Kecualikan dokumen sendiri)
+            tkSnap.docs.forEach(doc => {
+                if (doc.id === targetDocId) return;
+                const d = doc.data();
+                if (d.is_completed) return;
+                const existStart = timeToMinutes(d.time);
+                const existEnd = timeToMinutes(d.end_time || addOneHour(d.time));
+                if (existStart !== null && existEnd !== null && newStartMin < existEnd && newEndMin > existStart) {
+                    conflicts.push({ title: `📝 Tugas: ${d.title}`, time: `${d.time} - ${d.end_time || addOneHour(d.time)}` });
+                }
+            });
+
+            // 4. Periksa Konsultasi (Kecualikan dokumen sendiri)
+            cSnap.docs.forEach(doc => {
+                if (doc.id === targetDocId) return;
+                const d = doc.data();
+                if (d.status === 'CANCELLED' || d.status === 'REJECTED' || d.status === 'COMPLETED') return;
+                const existStart = timeToMinutes(d.start_time);
+                const existEnd = timeToMinutes(d.end_time);
+                if (existStart !== null && existEnd !== null && newStartMin < existEnd && newEndMin > existStart) {
+                    conflicts.push({ title: `🎓 Bimbingan: ${d.title}`, time: `${d.start_time} - ${d.end_time}` });
+                }
+            });
+
+            // Jika bentrok dengan agenda lain:
+            if (conflicts.length > 0) {
+                const targetTitle = currentData.course_name || currentData.title || "Jadwal";
+                let conflictReply = `⚠️ *GAGAL MENGGESER JADWAL (BENTROK)!*\n\n`;
+                conflictReply += `Tidak dapat memindahkan *${targetTitle}* ke jam *${effectiveStartTime} - ${effectiveEndTime}* pada tanggal *${effectiveDate}* karena bertabrakan dengan:\n\n`;
+                conflicts.forEach((c, idx) => {
+                    conflictReply += `${idx + 1}. *${c.title}* (⏰ ${c.time})\n`;
+                });
+                conflictReply += `\nSilakan pilih jam atau tanggal lain.`;
+                return res.json({ status: 'success', reply: `${conflictReply}\n\n🤖 *Lecturo Assistant*` });
+            }
+        }
+        // ====================================================================
+
+        // Siapkan payload update Firestore
+        const finalUpdatePayload = {
+            updated_at: new Date().toISOString()
+        };
+        for (const k in fields) {
+            if (fields[k] !== undefined && fields[k] !== null && fields[k] !== "") {
+                finalUpdatePayload[k] = fields[k];
+            }
+        }
+
+        // Tulis perubahan ke Firestore
+        await docRef.update(finalUpdatePayload);
+        console.log(`✅ Berhasil update jadwal [${aiData.document_id}] di koleksi ${aiData.collection}`);
+
+        return res.json({
+            status: 'success',
+            reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*`
+        });
+
+    } catch (e) {
+        console.error("Gagal parse Update:", e);
+        return res.json({
+            status: 'error',
+            reply: `Maaf, saya mengalami kesulitan memproses perubahan jadwal tersebut. Mohon ulangi instruksi Anda dengan lebih jelas.\n\n🤖 *Lecturo Assistant*`
+        });
+    }
+};
+
+// ============================================================================
 // 4. FUNGSI DELETE (Pindahkan pemanggilan DB ke sini agar tidak membebani fungsi lain)
 // ============================================================================
 const processDeleteSchedule = async (res, userRef, message) => {
@@ -590,10 +836,11 @@ const chatWithGemini = async (req, res) => {
         const finalName = userName || "Dosen";
         const finalNameWithTitle = panggilan ? `${panggilan} ${finalName}` : finalName;
 
-        // FASE 0: ROUTING INTENT DENGAN INSTRUKSI LEBIH CERDAS
+        // FASE 0: ROUTING INTENT DENGAN INSTRUKSI LEBIH LENGKAP
         const intentPrompt = `Pesan user: "${message}". Tujuan utama user? 
         Pilih HANYA SATU KATA dari daftar berikut:
         - CREATE : jika ingin menambah/membuat jadwal baru.
+        - UPDATE : jika ingin mengubah, menggeser jam, memindahkan tanggal, menunda, atau mengganti lokasi/ruangan jadwal yang sudah ada (contoh: "geser rapat besok ke jam 15", "ubah jadwal mengajar jadi jam 10", "pindahkan bimbingan ke lab 2").
         - DELETE : jika ingin menghapus/membatalkan jadwal.
         - READ : jika menanyakan jadwal, atau sekadar menyapa/salam (contoh: "halo", "selamat pagi", "p", "assalamualaikum").
         - OUT_OF_SCOPE : jika bertanya hal di luar jadwal akademik (contoh: cuaca, matematika, coding, resep masakan).
@@ -606,6 +853,9 @@ const chatWithGemini = async (req, res) => {
 
         if (intentText.includes('CREATE')) {
             return await processCreateSchedule(res, userRef, message, formattedNow);
+        }
+        else if (intentText.includes('UPDATE') || intentText.includes('RESCHEDULE')) {
+            return await processUpdateSchedule(res, userRef, message, formattedNow, todayStr, tomorrowStr);
         }
         else if (intentText.includes('DELETE')) {
             return await processDeleteSchedule(res, userRef, message);
