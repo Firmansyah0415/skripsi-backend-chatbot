@@ -1,4 +1,6 @@
 const db = require('../config/firebaseConfig');
+// Map untuk menyimpan status konfirmasi hapus sementara (TTL: 2 Menit)
+const pendingDeleteMap = new Map();
 
 // ============================================================================
 // SISTEM HYBRID FAILOVER: LM STUDIO (UTAMA) -> OPENROUTER (CADANGAN OTOMATIS)
@@ -754,11 +756,11 @@ const processUpdateSchedule = async (res, userRef, message, formattedNow, todayS
 };
 
 // ============================================================================
-// 4. FUNGSI DELETE (Pindahkan pemanggilan DB ke sini agar tidak membebani fungsi lain)
+// 4. FUNGSI DELETE (DENGAN SAFETY CONFIRMATION - TAHAP 1: VALIDASI TARGET)
 // ============================================================================
 const processDeleteSchedule = async (res, userRef, message) => {
-    console.log(`🔍 [PENCARIAN DB] Mengambil jadwal aktif untuk dihapus...`);
-    // Ambil jadwal yang belum selesai agar AI punya konteks apa yang mau dihapus
+    console.log(`🔍 [PENCARIAN DB] Mengambil jadwal aktif untuk target hapus...`);
+
     const [teachingSnap, eventSnap, taskSnap, consultationSnap] = await Promise.all([
         userRef.collection('teaching_schedules').where('is_completed', '==', false).get(),
         userRef.collection('events').where('is_completed', '==', false).get(),
@@ -782,24 +784,67 @@ const processDeleteSchedule = async (res, userRef, message) => {
     {
       "document_id": "ID_DB",
       "collection": "koleksi (tasks/events/teaching_schedules/consultations)",
-      "reply": "Pesan konfirmasi berhasil"
+      "reply": "Pesan konfirmasi"
     }
     Kosongkan document_id jika tidak ketemu.
     `;
 
     const result = await generateWithFallback(prompt);
-    let cleanJson = (await result.response).text().replace(/```json/g, '').replace(/```/g, '').trim();
+    let cleanJson = (await result.response).text().replace(/```json/gi, '').replace(/```/g, '').trim();
 
     try {
         const aiData = JSON.parse(cleanJson);
-        if (aiData.document_id && aiData.document_id.trim() !== "") {
-            await userRef.collection(aiData.collection).doc(aiData.document_id).delete();
-            return res.json({ status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` });
+        const validCollections = ['teaching_schedules', 'events', 'tasks', 'consultations'];
+
+        if (aiData.document_id && aiData.document_id.trim() !== "" && validCollections.includes(aiData.collection)) {
+            // Ambil rincian jadwal dari Firestore untuk ditampilkan di pesan konfirmasi
+            const docRef = userRef.collection(aiData.collection).doc(aiData.document_id);
+            const docSnap = await docRef.get();
+
+            if (!docSnap.exists) {
+                return res.json({
+                    status: 'success',
+                    reply: `Maaf, jadwal tersebut sudah tidak ditemukan di database Anda.\n\n🤖 *Lecturo Assistant*`
+                });
+            }
+
+            const data = docSnap.data();
+            const scheduleTitle = data.course_name || data.title || "Agenda";
+            const scheduleDate = data.date || "-";
+            const scheduleTime = data.start_time || data.time || "-";
+            const scheduleEnd = data.end_time ? ` - ${data.end_time}` : "";
+
+            // SIMPAN KE MEMORI SEMENTARA (BERLAKU 2 MENIT)
+            pendingDeleteMap.set(userRef.id, {
+                docId: aiData.document_id,
+                collection: aiData.collection,
+                title: scheduleTitle,
+                date: scheduleDate,
+                time: `${scheduleTime}${scheduleEnd}`,
+                expiresAt: Date.now() + 2 * 60 * 1000 // 2 menit kedaluwarsa
+            });
+
+            const confirmMessage =
+                `⚠️ *KONFIRMASI PENGHAPUSAN JADWAL*\n\n` +
+                `Apakah Anda yakin ingin menghapus agenda berikut?\n` +
+                `📌 *${scheduleTitle}*\n` +
+                `📅 Tanggal: ${scheduleDate}\n` +
+                `⏰ Waktu: ${scheduleTime}${scheduleEnd}\n\n` +
+                `Ketik *YA* untuk menghapus secara permanen, atau *BATAL* untuk membatalkan (berlaku 2 menit).`;
+
+            return res.json({ status: 'success', reply: `${confirmMessage}\n\n🤖 *Lecturo Assistant*` });
         } else {
-            return res.json({ status: 'success', reply: "Maaf, jadwal tersebut tidak ditemukan di database Anda.\n\n🤖 *Lecturo Assistant*" });
+            return res.json({
+                status: 'success',
+                reply: `Maaf, jadwal tersebut tidak ditemukan di database Anda.\n\n🤖 *Lecturo Assistant*`
+            });
         }
     } catch (e) {
-        return res.json({ status: 'error', reply: "Maaf, saya gagal memproses permintaan hapus Anda.\n\n🤖 *Lecturo Assistant*" });
+        console.error("Gagal parse Delete:", e);
+        return res.json({
+            status: 'error',
+            reply: `Maaf, saya gagal memproses permintaan hapus Anda.\n\n🤖 *Lecturo Assistant*`
+        });
     }
 };
 
@@ -828,6 +873,42 @@ const chatWithGemini = async (req, res) => {
         const tomorrowStr = formatter.format(tomorrow).split(' ')[0];
 
         const userRef = db.collection('users').doc(uid);
+
+        // ====================================================================
+        // 🛑 PENCEGAT SAFETY CONFIRMATION (MENANGKAP "YA" ATAU "BATAL")
+        // ====================================================================
+        const pendingDelete = pendingDeleteMap.get(uid);
+        if (pendingDelete) {
+            // Cek kedaluwarsa (lebih dari 2 menit)
+            if (Date.now() > pendingDelete.expiresAt) {
+                pendingDeleteMap.delete(uid);
+            } else {
+                const cleanMsg = message.trim().toLowerCase();
+
+                // Jika Dosen Mengonfirmasi Hapus ("ya", "iya", "ok", "lanjut")
+                if (['ya', 'iya', 'y', 'oke', 'ok', 'hapus'].includes(cleanMsg)) {
+                    await userRef.collection(pendingDelete.collection).doc(pendingDelete.docId).delete();
+                    pendingDeleteMap.delete(uid); // Bersihkan tiket
+
+                    console.log(`🗑️ Jadwal [${pendingDelete.docId}] berhasil dihapus via konfirmasi.`);
+                    return res.json({
+                        status: 'success',
+                        reply: `✅ Jadwal *${pendingDelete.title}* (${pendingDelete.date}) telah berhasil dihapus dari kalender Anda.\n\n🤖 *Lecturo Assistant*`
+                    });
+                }
+                // Jika Dosen Membatalkan ("batal", "tidak", "gak")
+                else if (['batal', 'tidak', 'gak', 'enggak', 'cancel', 'jangan'].includes(cleanMsg)) {
+                    pendingDeleteMap.delete(uid); // Bersihkan tiket
+
+                    return res.json({
+                        status: 'success',
+                        reply: `Penghapusan jadwal *${pendingDelete.title}* dibatalkan. Agenda Anda tetap tersimpan aman.\n\n🤖 *Lecturo Assistant*`
+                    });
+                }
+            }
+        }
+        // ====================================================================
+
         const userSnap = await userRef.get();
         const userData = userSnap.data() || {};
         const gender = userData.gender || "";
