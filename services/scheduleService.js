@@ -1,4 +1,5 @@
 // services/scheduleService.js
+const { sendSyncSignal } = require('./fcmService');
 const { generateWithFallback } = require('./aiService');
 const { checkScheduleConflict, buildConflictMessage } = require('./conflictService');
 const { addOneHour, calculateProportionalEndTime } = require('../utils/timeHelper');
@@ -29,6 +30,10 @@ const handlePendingDelete = async (userRef, message) => {
 
     if (['ya', 'iya', 'y', 'oke', 'ok', 'hapus'].includes(cleanMsg)) {
         await userRef.collection(pendingDelete.collection).doc(pendingDelete.docId).delete();
+
+        // 🚀 TRIGGER SINKRONISASI LATAR BELAKANG KE ANDROID
+        sendSyncSignal(userRef.id, { action: 'DELETE', collection: pendingDelete.collection });
+
         pendingDeleteMap.delete(uid);
 
         console.log(`🗑️ Jadwal [${pendingDelete.docId}] berhasil dihapus via konfirmasi.`);
@@ -182,6 +187,8 @@ const processCreateSchedule = async (userRef, message, formattedNow) => {
         }
 
         await userRef.collection(aiData.collection).add(finalData);
+        // 🚀 TRIGGER SINKRONISASI LATAR BELAKANG KE ANDROID
+        sendSyncSignal(userRef.id, { action: 'CREATE', collection: aiData.collection });
         return { status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` };
 
     } catch (e) {
@@ -311,6 +318,10 @@ const processUpdateSchedule = async (userRef, message, formattedNow, todayStr, t
         }
 
         await docRef.update(finalUpdatePayload);
+
+        // 🚀 TRIGGER SINKRONISASI LATAR BELAKANG KE ANDROID
+        sendSyncSignal(userRef.id, { action: 'UPDATE', collection: aiData.collection });
+
         console.log(`✅ Berhasil update jadwal [${aiData.document_id}]`);
 
         return { status: 'success', reply: `${aiData.reply}\n\n🤖 *Lecturo Assistant*` };
